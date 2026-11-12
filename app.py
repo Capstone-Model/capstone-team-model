@@ -15,7 +15,10 @@ PERSIST_PREFIXES = ("m_", "mb_", "c1_", "c2_", "c3b_", "c4_year_", "al_")
 NOT_PERSISTED = {"m_params", "m_custom_tbl", "mb_custom_tbl"}          # data editors cannot be set this way
 for _k in list(st.session_state.keys()):
     if isinstance(_k, str) and _k.startswith(PERSIST_PREFIXES) and _k not in NOT_PERSISTED:
-        st.session_state[_k] = st.session_state[_k]
+        try:
+            st.session_state[_k] = st.session_state[_k]
+        except st.errors.StreamlitAPIException:     # buttons, download buttons, uploaders: not settable, skip
+            pass
 
 pg = st.navigation([st.Page(path, title=title, icon=icon, default=(i == 0))
                     for i, (path, title, icon) in enumerate(th.PAGES)], position="top")
