@@ -46,7 +46,7 @@ SERVICE_NAMES = {"hiv_art": ("HIV Treatment (ART)", "people on ART"), "hiv_pmtct
                  "tb_ds": ("TB Treatment", "courses"), "tb_dr": ("Drug-Resistant TB Treatment", "courses"),
                  "mal_itn": ("Bednets", "people"), "mal_irs": ("Indoor Spraying", "people"),
                  "mal_cm": ("Malaria Testing & Treatment", "cases treated"), "imm": ("Routine Immunization", "children")}
-TIER_COLORS = {"High": "#3D3747", "Medium": "#857E92", "Low": "#BDB6C8"}     # neutral: purple is TB and the brand
+TIER_COLORS = {"High": "#3D3747", "Medium": "#857E92", "Low": "#B2AABF"}     # neutral: purple is TB and the brand
 GAIN, LOSE = th.BLUE, th.ROSE
 SOURCE_NOTE = "Team allocation model; this dashboard's model."
 SHORT_RULE = {"cpl_need": "+ Cost per life + need (team plan)", "cpl": "+ Cost per life", "need": "+ Need",
@@ -81,6 +81,16 @@ def bn(x_m: float) -> str:
     if abs(x_m) < 0.5:
         return "$0"
     return f"${x_m / 1e3:,.1f}B" if abs(x_m) >= 1e3 else f"${x_m:,.0f}M"
+
+
+def money_ticks(lo: float, hi: float, unit: str = "M", n: int = 6) -> dict:
+    """Tick values and labels for a money axis ('$0', '−$500M', '$1B'): Plotly's own format writes '$0M'."""
+    raw = (hi - lo) / n
+    mag = 10 ** np.floor(np.log10(raw))
+    step = min((m * mag for m in (1, 2, 2.5, 5, 10) if m * mag >= raw), default=raw)
+    vals = np.arange(np.ceil(lo / step) * step, hi + 1e-9, step)
+    return dict(tickvals=list(vals), ticktext=["$0" if abs(v) < 1e-9 else ("−" if v < 0 else "") + f"${abs(v):,.0f}{unit}"
+                                               for v in vals])
 
 
 def lower_dis(b: str) -> str:
@@ -136,7 +146,7 @@ nk, ek = RULES.at[rule, "need_k"], RULES.at[rule, "eff_k"]
 with lede_box:
     head = (f"Dividing the same {ms.money_words(POOL * 1e6)} of health aid {RULE_PHRASE[rule]} would cut extra deaths "
             f"by {SAVED / TOT['red']:.0%}")
-    dek = (f"Health aid to these {N_ALL} countries is set to fall from {bn(C['aid_2023'].sum())} in 2023 to "
+    dek = (f"Health aid to the {N_ALL} countries in the plan is set to fall from {bn(C['aid_2023'].sum())} in 2023 to "
            f"{bn(POOL)} in 2026. Keeping that smaller total, this plan asks countries that can raise more money at home to "
            f"give up more aid" + (f", and protects {PROTECTS[rule]}." if PROTECTS[rule] else "."))
     big = [(num(TOT["red"]), "Extra Deaths, Current Split", "2026-2030, no new money"),
@@ -199,8 +209,8 @@ with st.expander("The formula, step by step"):
    highest ({best['country']}, {money(best['cost_per_life'])} per life saved), so efficiency runs from 0 to 1. The
    {int((~C['in_dashboard']).sum())} countries this dashboard does not model take their income group's
    average.{'' if ek else ' *Off under this rule.*'}
-4. **λ = {LAM:.1%}.** One number for every country: the share of its effective capacity (capacity × both
-   discounts) it gives up. It is set so the cuts add up to exactly {bn(TOTAL_CUT)} a year. A country whose cut would be
+4. **λ = {LAM:.1%}.** One number for every country: the share of its effective capacity (what it could raise,
+   after any protection discounts) it gives up. It is set so the cuts add up to exactly {bn(TOTAL_CUT)} a year. A country whose cut would be
    more than all its aid goes to zero instead, and λ rises a little so the others cover the difference.
 """))
 
@@ -266,7 +276,8 @@ with st.expander("How much of the gain comes from new money, and how much from r
         f"Going from the current split with no new money to reallocated aid plus new money saves about "
         f"{ms.round_words(TOT['red'] - TOT['green'])} lives. The two changes interact, so each one's share depends on "
         f"which comes first; averaging both orders gives **about {ms.round_words(nm)} to new money** and **about "
-        f"{ms.round_words(ra)} to reallocation**. This is an "
+        f"{ms.round_words(ra)} to reallocation**. That is smaller than the reallocation-alone figure above because, once new money is in, "
+        f"reallocation has less left to fix. This is an "
         f"accounting split of these scenarios, not a causal estimate."))
 
 # --------------------------------------------------------------------------- #
@@ -291,11 +302,11 @@ fig = go.Figure(go.Bar(
                    "<extra></extra>")))
 lo_x, hi_x = float(min(movers.min(), 0)), float(max(movers.max(), 0))
 pad = (hi_x - lo_x) * 0.2                          # room for the value labels outside the bars
-fig.update_layout(height=40 + 26 * len(movers) + 80, showlegend=False, margin=dict(t=80, l=10, r=10),
+fig.update_layout(height=40 + 26 * len(movers) + 80, showlegend=False, margin=dict(t=80, l=10, r=40),
                   uniformtext=dict(minsize=12, mode="show"),
                   title=th.title_sub(f"The {N_MOVERS} Biggest Gains and Losses",
                                      "This plan minus the OECD projection, US$ a year"),
-                  xaxis=dict(range=[lo_x - pad, hi_x + pad], tickformat="$,.0f", ticksuffix="M", nticks=7),
+                  xaxis=dict(range=[lo_x - pad, hi_x + pad], **money_ticks(lo_x - pad, hi_x + pad)),
                   yaxis=dict(autorange="reversed", ticklabelstandoff=8))
 chart(fig, source=SOURCE_NOTE, note="Hover for each country's aid and what it could raise at home.")
 loser = C.loc[dv.idxmin()]
@@ -325,9 +336,9 @@ with st.expander(f"Every country's aid, split four ways (all {N_ALL})"):
                     hovertemplate=("<b>%{customdata[0]}</b><br>" + lbl + ": %{y:.1f}% (%{customdata[4]})<br>"
                                    "2023 aid %{customdata[1]} · OECD 2026 %{customdata[2]} · this plan %{customdata[3]}"
                                    "<extra></extra>"))
-    fig.update_layout(barmode="stack", bargap=0.12, height=470, margin=dict(t=100),
-                      title=th.title_sub("Each Country's 2023 Aid, With New Money Filling the Cut",
-                                         "One bar per country, ranked by how much it could raise relative to its aid"),
+    fig.update_layout(barmode="stack", bargap=0.12, height=480, margin=dict(t=110),
+                      title=th.title_sub("Each Country's 2023 Aid",
+                                         "Reallocated + new money · ranked by what it<br>could raise relative to its aid"),
                       xaxis=dict(showticklabels=False, title="← Least able to replace aid · most able →"),
                       yaxis=dict(range=[0, 104], ticksuffix="%", title="Share of 2023 health aid"))
     chart(fig, source=SOURCE_NOTE,
@@ -355,7 +366,7 @@ fig.update_layout(barmode="stack", height=460, showlegend=False, margin=dict(t=1
                   title=th.title_sub("Funding Gap Left Each Year, by Disease Need",
                                      th.color_key((f"{t} ({int((tiers == t).sum())})", TIER_COLORS[t])
                                                   for t in ["High", "Medium", "Low"])),
-                  yaxis=dict(tickformat="$,.0f", ticksuffix="B", range=[0, TOTAL_CUT / 1e3 * 1.15]))
+                  yaxis=dict(range=[0, TOTAL_CUT / 1e3 * 1.15], **money_ticks(0, TOTAL_CUT / 1e3 * 1.15, "B")))
 chart(fig, source=SOURCE_NOTE,
       note=f"US$ a year, all {N_ALL} countries. Need groups (number of countries): thirds by the need index; countries "
            "tied at a fallback value share a third, so the groups are not equal.")
@@ -402,7 +413,8 @@ pill_row([("Could Raise for Health", m_usd(r["capacity"]), "a year", cap_tip),
            r["need_source"]),
           ("Cost-per-Life Score", f"{r['efficiency']:.2f}", f"discount × {ed:.2f}" if ek else "not used by this rule",
            "Efficiency, 0-1: lives saved per US$1M of aid relative to the best country. " + cpl_txt),
-          ("After Protection", m_usd(r[eff_col]), "cut = all of its 2023 aid" if capped else f"× λ = cut {m_usd(cut)}",
+          ("After Protection" if (nk or ek) else "Counted Capacity", m_usd(r[eff_col]),
+           "cut = all of its 2023 aid" if capped else ("no cut" if cut <= 0 else f"λ share: cut {m_usd(cut)}"),
            "What it could raise × the need and cost-per-life discounts (its effective capacity). The cut is λ times "
            "this, but never more than all of the country's 2023 aid.")], 4)
 _n_disc = int(bool(nk)) + int(bool(ek))
@@ -433,7 +445,7 @@ else:
 
 with st.expander(f"All {N_ALL} countries in one table"):
     T = pd.DataFrame({
-        "Country": C["country"], "Income Group": C["income"],
+        "Country": C["country"].replace({"Democratic Republic of the Congo": "DR Congo"}), "Income Group": C["income"],
         "2023 Aid ($M)": C["aid_2023"], "OECD 2026 ($M)": C["aid_2026_proj"], "This Plan 2026 ($M)": C[aid_col],
         "Change vs OECD ($M)": C[aid_col] - C["aid_2026_proj"], "Could Raise ($M/yr)": C["capacity"],
         "Need": C["need"], "Cost per Life Saved ($)": C["cost_per_life"], "Effective Capacity ($M)": C[eff_col],
@@ -443,6 +455,8 @@ with st.expander(f"All {N_ALL} countries in one table"):
     T = T.sort_values("Change vs OECD ($M)", ascending=False).round(
         {c: 1 for c in T.columns if "($M" in c} | {"Need": 2, "Cost per Life Saved ($)": 0, "Deaths, Current Split": 0,
                                                      "Deaths, Reallocated": 0, "Lives Saved": 0})
+    for c in ["Deaths, Current Split", "Deaths, Reallocated", "Lives Saved", "Cost per Life Saved ($)"]:
+        T[c] = T[c].astype("Int64")
     fm = st.column_config.NumberColumn
     st.dataframe(T, hide_index=True, height=420, **ms.WIDE, column_config={
         "Country": st.column_config.TextColumn(pinned=True, width="medium"),
@@ -517,7 +531,8 @@ fig = go.Figure(go.Bar(
 fig.update_layout(height=360, showlegend=False, margin=dict(t=80, r=20),
                   title=th.title_sub("Lives Saved by Reallocation Alone, by Rule",
                                      "2026-2030, compared with the current split, no new money"),
-                  xaxis=dict(tickformat="~s", nticks=5, range=[0, max(r_[1] for r_ in RR["range"]) * 1.08]),
+                  xaxis=dict(range=[0, max(r_[1] for r_ in RR["range"]) * 1.08],
+                             tickvals=[0, 2e5, 4e5, 6e5], ticktext=["0", "200K", "400K", "600K"]),
                   yaxis=dict(ticklabelstandoff=10))
 chart(fig, source=SOURCE_NOTE, note=f"Every rule starts from ability to pay. Whiskers: the {th.RANGE_LABEL}. The "
                                      "selected rule is dark blue.")
@@ -527,7 +542,7 @@ if best_rule["key"] != "cap":
         f"**{best_rule['label']} saves the most lives here**, {best_rule['vs_cap']:,.0f} more than ability to pay "
         f"alone. Each protection shields some countries, so the cut falls on fewer others and more of them end at zero "
         f"aid ({int(RR.set_index('key').at['cap', 'zero'])} with ability to pay alone, "
-        f"{int(RR.set_index('key').at[am.PLAN, 'zero'])} with the team plan)."))
+        f"{int(best_rule['zero'])} with {'the team plan' if best_rule['key'] == am.PLAN else best_rule['label'].lower()})."))
 
 with st.expander("Why cost per life favours countries with large TB programs"):
     MED = am.disease_medians(R)
