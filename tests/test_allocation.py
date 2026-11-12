@@ -98,3 +98,40 @@ def test_page_renders_for_every_rule(rule):
     for iso in ["KSV", "VNM", "NER"]:                  # zero capacity, zero aid, most efficient
         at.selectbox(key="al_country").set_value(iso).run()
         assert not at.exception
+
+
+
+def test_no_unsettable_widget_uses_a_persisted_key():
+    """app.py writes back every widget value whose key starts with PERSIST_PREFIXES, on every run. Streamlit refuses
+    that for buttons, download buttons and file uploaders: with key 'al_dl_table' the Reallocation tab crashed as soon
+    as a visitor changed a setting (seen in a browser; AppTest does not reproduce it). So none may use those keys."""
+    import ast
+    import re
+    root = Path(__file__).resolve().parent.parent
+    src = (root / "app.py").read_text()
+    prefixes = ast.literal_eval(re.search(r"PERSIST_PREFIXES = (\(.*?\))", src).group(1))
+    bad = []
+    for f in [root / "app.py", root / "model_section.py", root / "budget_section.py", *(root / "views").glob("*.py")]:
+        for m in re.finditer(r"st\.(?:download_button|button|file_uploader|form_submit_button)\((.*?)\)\s*$",
+                             f.read_text(), re.S | re.M):
+            for k in re.findall(r"key=f?[\"']([^\"']+)[\"']", m.group(1)):
+                if k.startswith(prefixes):
+                    bad.append((f.name, k))
+    assert not bad, bad
+
+
+def test_switching_pages_after_using_the_tab():
+    """Smoke test through app.py: open the tab, change the rule and country, move to another page and back."""
+    from streamlit.testing.v1 import AppTest
+    root = Path(__file__).resolve().parent.parent
+    at = AppTest.from_file(str(root / "app.py"), default_timeout=300)
+    at.run()
+    at.switch_page("views/5_Allocation.py").run()
+    assert not at.exception
+    at.selectbox(key="al_rule").set_value("cap").run()
+    at.selectbox(key="al_country").set_value("VNM").run()
+    assert not at.exception
+    at.switch_page("views/4_Methods.py").run()
+    assert not at.exception
+    at.switch_page("views/5_Allocation.py").run()
+    assert not at.exception and at.selectbox(key="al_rule").value == "cap"

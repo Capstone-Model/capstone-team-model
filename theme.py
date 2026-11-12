@@ -458,7 +458,7 @@ hr {{ border-color: {RULE} !important; }}
 [data-testid="stSelectbox"] .react-aria-ComboBox button svg, [data-baseweb="select"] svg {{ color: {BRAND} !important; }}
 .st-key-model_controls {{ background: {SURFACE_TINT}; border-radius: 12px; padding: 12px 16px 6px !important; }}
 .st-key-alloc_controls {{ background: {SURFACE_TINT}; border-color: {RULE} !important; border-radius: 12px;
-                          padding: 12px 16px 6px !important; margin-bottom: 18px; }}
+                          padding: 12px 16px 12px !important; margin: 4px 0 8px; }}
 
 /* ---- funding-path sliders: red = aid cut, blue = extra health share; the year in bold above each column ---- */
 .ed-year {{ font-family: {SANS}; font-weight: 700; font-size: 14px; color: {INK}; text-align: center; margin-bottom: -6px; }}
@@ -506,6 +506,49 @@ hr {{ border-color: {RULE} !important; }}
   .ed-bignums {{ grid-template-columns: 1fr; }}
   .ed-bignum + .ed-bignum {{ border-left: none; border-top: 1px solid {RULE}; padding-left: 0; }}
   .ed-bignum .v {{ font-size: 32px; }}
+}}
+
+/* ---- Reallocation page ---- */
+/* the 2 x 2 scenario grid: aid split (rows) x new money (columns) */
+.ed-matrix {{ display: grid; grid-template-columns: minmax(120px, 0.62fr) 1fr 1fr; gap: 10px; margin: 0.2rem 0 0.8rem; }}
+.ed-matrix .hd {{ font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: {MUTED};
+                  align-self: end; padding: 0 2px 2px; }}
+.ed-matrix .rh {{ font-family: {SERIF}; font-size: 19px; font-weight: 600; color: {INK}; align-self: center;
+                  line-height: 1.2; }}
+.ed-matrix .rh small {{ display: block; font-family: {SANS}; font-size: 12.5px; font-weight: 400; color: {MUTED};
+                        margin-top: 4px; line-height: 1.35; }}
+.ed-mcell {{ background: {SURFACE_TINT}; border: 1px solid {RULE}; border-left: 5px solid; border-radius: 10px;
+             padding: 12px 16px 13px; cursor: help; }}
+.ed-mcell .k {{ font-size: 12.5px; font-weight: 600; }}
+.ed-mcell .v {{ font-family: {SERIF}; font-size: 36px; font-weight: 600; line-height: 1.08; color: {INK};
+                margin-top: 4px; }}
+.ed-mcell .v small {{ font-family: {SANS}; font-size: 14px; font-weight: 700; color: {MUTED}; margin-left: 8px; }}
+.ed-mcell .n {{ font-size: 12.5px; color: {MUTED}; margin-top: 4px; line-height: 1.4; }}
+@media (max-width: 720px) {{
+  .ed-matrix {{ grid-template-columns: 1fr 1fr; gap: 8px; }}
+  .ed-matrix .corner {{ display: none; }}
+  .ed-matrix .rh {{ grid-column: 1 / -1; margin-top: 8px; font-size: 17px; }}
+  .ed-matrix .rh small {{ display: inline; margin-left: 6px; }}
+  .ed-mcell {{ padding: 10px 12px; }}
+  .ed-mcell .v {{ font-size: 27px; }}
+  .ed-mcell .v small {{ display: block; margin: 2px 0 0; font-size: 12.5px; }}
+}}
+/* wide tables keep their first column in view while the rest scrolls sideways */
+.ed-nyt.sticky td.svc, .ed-nyt.sticky th:first-child {{ position: sticky; left: 0; z-index: 1; background: {SURFACE};
+    box-shadow: 1px 0 0 {RULE}; }}
+.ed-nyt.sticky tr:hover td.svc {{ background: {SURFACE_TINT}; }}
+@media (max-width: 720px) {{ .ed-nyt.sticky col:first-child {{ width: 150px !important; }} }}
+/* three explainer cards in a row (one column on a phone) */
+.ed-cards.three {{ grid-template-columns: repeat(3, minmax(0, 1fr)); }}
+.ed-card .why {{ font-size: 14px; line-height: 1.5; color: #4A4458; margin-top: 10px; }}
+@media (max-width: 720px) {{ .ed-cards.three {{ grid-template-columns: 1fr; }} }}
+/* the big numbers under a headline: two by two on a phone */
+@media (max-width: 720px) {{
+  .ed-bignums {{ grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }}
+  .ed-bignums .ed-bignum {{ border-left: none !important; border-top: none !important; padding: 12px 10px 12px 0 !important; }}
+  .ed-bignums .ed-bignum:nth-child(even) {{ border-left: 1px solid {RULE} !important; padding-left: 12px !important; }}
+  .ed-bignums .ed-bignum:nth-child(n+3) {{ border-top: 1px solid {RULE} !important; }}
+  .ed-bignums .ed-bignum .v {{ font-size: 28px !important; }}
 }}
 
 /* formulas (st.latex) scroll sideways on a phone instead of running off the page */
