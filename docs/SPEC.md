@@ -562,3 +562,34 @@ uncertainty in the data and in the model's structure is larger and not included.
 `model_data/all_countries_<preset>_draws.csv`: one row per draw (`draw` 0-399), with the all-country total of
 `deaths_5y` (2026-2030) and `deaths_after_2030` (2031-2035) in that draw. The All Countries ranges come from these (the
 Validation page, which also uses them, is out of the navigation on chipmunk).
+
+## 11. Allocation model (Reallocation page)
+
+`allocation_model.py` rebuilds the team workbook `ALLOCATION MODEL/Allocation_model_CostPerLife_Need.xlsx` in Python
+from its raw data sheets (Data_Aid, Data_Tax, Data_KS, Data_HealthHist, Data_Need, Assumptions; no formula value is
+read, since the workbook was saved without them) and writes `model_data/allocation/`. Per country i, US$ millions a
+year, 82 countries:
+
+- capacity = new tax revenue (tax workbook, 2027-30 average; else the Tax Calc gain ramped at 1.22 pp of GDP a year)
+  x health share of government spending + room x best 4-year rise in health share (own 2000-2023 history, else the
+  median) x government spending x 0.625 (phased 2027-30). Room = clip((K&S score - 48.8) / (63.9 - 48.8), 0, 1); 0
+  with no score or no health-share data.
+- need = DAH-adjusted need index (team disease-burden model); outside that model, the median of the country's
+  capstone need tier (all-country median if none). Need discount = 1 / (1 + k_need x need), k_need = 4.
+- lives per US$1M = this engine, every HIV/TB/malaria/immunization line cut 10%, no replacement, central values:
+  sum over diseases of (disease share of aid) x (deaths 2026-2030 / US$1M of yearly aid lost). Efficiency = lives per
+  US$1M / the highest; countries not in the dashboard take their income-group mean. Efficiency discount =
+  1 / (1 + k_eff x efficiency), k_eff = 4.
+- cut = min(aid 2023, lambda x capacity x need discount x efficiency discount), lambda solved (breakpoint method) so
+  the cuts add up to sum(aid 2023) - sum(OECD 2026 projection) = US$4,716m; model 2026 aid = aid 2023 - cut.
+- rules: k_need, k_eff = (4, 4) team plan, (0, 4), (4, 0), (0, 0) capacity only.
+- scenarios, 65 countries in both the workbook and the dashboard: `run_country` with the country's cut rate on every
+  cell (projected cut / 2023 aid for Red and Yellow, model cut / 2023 aid for Blue and Green) and
+  `Fiscal(custom, theta, cap_to_space=False, pro_rata, p75)`, theta = 0 (Red, Blue), min(capacity, cut) / cut
+  (Yellow, Green); 400 draws, seed 7.
+- coverage = sum(need x (cov0 - drop)) / sum(need) over countries with the service; ranges = 2.5th-97.5th percentile
+  of the all-country total (or difference) draw by draw; need thirds = `pd.qcut(need, 3)`.
+
+On the engine committed when the workbook was made this reproduces the team's results PDF exactly (deaths 898,897 /
+199,893 / 0 / 506,894, every coverage, unit, range and rule value). The page shows results on the current engine.
+`prepare_model.py --precompute-only` refreshes these files; `tests/test_allocation.py` fails if they are stale.

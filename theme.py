@@ -8,6 +8,7 @@ Every color used by app.py, model_section.py and views/ comes from here.
 from __future__ import annotations
 
 import html
+import re
 
 import plotly.graph_objects as go
 import plotly.io as pio
@@ -456,6 +457,8 @@ hr {{ border-color: {RULE} !important; }}
     border-color: {BRAND} !important; box-shadow: 0 0 0 2px {BRAND_LIGHT} !important; }}
 [data-testid="stSelectbox"] .react-aria-ComboBox button svg, [data-baseweb="select"] svg {{ color: {BRAND} !important; }}
 .st-key-model_controls {{ background: {SURFACE_TINT}; border-radius: 12px; padding: 12px 16px 6px !important; }}
+.st-key-alloc_controls {{ background: {SURFACE_TINT}; border-color: {RULE} !important; border-radius: 12px;
+                          padding: 12px 16px 6px !important; margin-bottom: 18px; }}
 
 /* ---- funding-path sliders: red = aid cut, blue = extra health share; the year in bold above each column ---- */
 .ed-year {{ font-family: {SANS}; font-weight: 700; font-size: 14px; color: {INK}; text-align: center; margin-bottom: -6px; }}
@@ -505,6 +508,10 @@ hr {{ border-color: {RULE} !important; }}
   .ed-bignum .v {{ font-size: 32px; }}
 }}
 
+/* formulas (st.latex) scroll sideways on a phone instead of running off the page */
+.katex-display {{ overflow-x: auto; overflow-y: hidden; padding: 4px 0; }}
+@media (max-width: 720px) {{ .katex-display > .katex {{ font-size: 0.9em !important; }} }}
+
 /* ---- "Source:" line under every chart ---- */
 .ed-source {{ font-family: {SANS}; font-size: 12px; color: {MUTED}; margin: -10px 0 6px;
               line-height: 1.45; }}
@@ -514,6 +521,7 @@ hr {{ border-color: {RULE} !important; }}
 
 PAGES = [("views/1_Dashboard.py", "Dashboard", ":material/dashboard:"),
          ("views/2_All_Countries.py", "All Countries", ":material/travel_explore:"),
+         ("views/5_Allocation.py", "Reallocation", ":material/balance:"),
          ("views/4_Methods.py", "Methods", ":material/menu_book:")]
 
 
@@ -563,7 +571,7 @@ def pills_html(items, cols: int | None = None, large: bool = False) -> str:
     for it in items:
         lbl, val, tip = it[:3]
         note = it[3] if len(it) > 3 and it[3] else ""
-        if note and str(val) and str(val) in note:
+        if note and str(val) and re.search(rf"(?<![\w.]){re.escape(str(val))}(?![\w.])", note):
             note = ""
         cells.append(f"<div class='ed-pill' title='{e(tip or '', quote=True)}'><span class='l'>{e(lbl)}</span>"
                      f"<span><span class='v'>{e(str(val))}</span>"
