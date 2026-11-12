@@ -11,7 +11,6 @@ loses aid; who carries the funding gap; one country; services; other rules; cave
 readers can skip sits in expanders.
 """
 import html
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -24,8 +23,6 @@ import theme as th
 from country_lists import ALLOWED_COUNTRIES
 from model_section import chart, money, num, pill_row, rng
 
-ROOT = Path(__file__).resolve().parent.parent
-SRC = ROOT / "ALLOCATION MODEL"
 e = html.escape
 
 # scenario key -> (name, short name for chart axes, color). Order: the story (reallocation first, then new money)
@@ -565,45 +562,3 @@ with st.expander("Why cost per life favours countries with large TB programs"):
                "<colgroup><col style='width:36%'>" + "<col style='width:16%'>" * 4 + "</colgroup><thead><tr>"
                "<th>Rule</th><th>λ</th><th>Countries at Zero Aid</th><th>Extra Deaths, No New Money</th>"
                "<th>Lives Saved vs Ability to Pay Only</th></tr></thead><tbody>" + tbl + "</tbody></table></div>")
-
-# --------------------------------------------------------------------------- #
-# 8. Caveats and sources
-# --------------------------------------------------------------------------- #
-th.section_header("report", "Reading These Results")
-# the team's results PDF (11 November 2026): extra deaths 2026-2030, current split / + new money / team plan reallocated
-PDF_DEATHS = {"red": 898_897, "yellow": 199_893, "blue": 506_894}
-_now = am.deaths_by_disease(R, am.PLAN).loc["Total"]
-_gap = max(abs(_now[k] / v - 1) for k, v in PDF_DEATHS.items())
-_same = all(round(_now[k]) == v for k, v in PDF_DEATHS.items())       # the PDF prints whole deaths
-PDF_NOTE = ("These results match the team's results PDF exactly." if _same else
-            f"This page uses the dashboard's current model, which has changed since the team's results PDF: total "
-            f"deaths differ from the PDF by up to {_gap:.1%}, some service counts (such as indoor spraying) by more.")
-st.markdown(ms._esc(f"""
-- **Built to score well here.** Cost per life comes from the same model that scores the results, so rules that use it
-  are designed to look good by this measure. Treat their lives saved as an upper bound; ability to pay + need is the
-  more independent comparison.
-- **Losses only.** The model counts what is lost when aid falls below its 2021-2023 level. The
-  {bn(CAPACITY - fills['green'])} a year of new money beyond what fills the cut buys nothing extra on this page.
-- **Two country sets.** The allocation covers {N_ALL} countries and all health aid; deaths and coverage cover the
-  {N_MATCHED} of them this dashboard models, for HIV, TB, malaria and immunization only.
-- **What countries could raise is not what they will.** The Kharas & Sarkar index measures room for new spending, not
-  budget flexibility; using it shrinks the budget shift, so the plan assumes less new money. Kosovo has no
-  health-share data, so it could raise nothing and is never cut; Azerbaijan and Somalia have no fiscal space score,
-  so only their tax revenue counts.
-- **The strength of the protection (k = 4) is a choice.** Where cost per life is used, the most efficient country
-  counts at a fifth of what it could raise; where need is used, need tops out at {C['need'].max():.2f}, so the
-  neediest country counts at about a third.
-- **Fixed scenarios, not forecasts.** Each scenario holds one set of choices for 2026-2030; none is a prediction.
-- **{'Same as the team PDF' if _same else 'Updated since the team PDF'}.** {PDF_NOTE}
-"""))
-kicker("Source files", "1.4rem")
-cols = st.columns(3)
-for col, (fname, label, mime) in zip(cols, [
-        ("Allocation_model_CostPerLife_Need.xlsx", "Workbook (Excel)",
-         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
-        ("Allocation_Model_Explanation.pdf", "Method (PDF)", "application/pdf"),
-        ("Allocation Results.pdf", "Results (PDF)", "application/pdf")]):
-    p = SRC / fname
-    if p.exists():
-        with col:
-            st.download_button(label, p.read_bytes(), file_name=fname, mime=mime, key=f"dl_alloc_{fname}", **ms.WIDE)
