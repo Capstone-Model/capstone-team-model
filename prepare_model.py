@@ -23,6 +23,7 @@ Writes ./model_data/:
                                  response (no backfill, pro-rata, 75th-percentile ceiling) and default parameters;
                                  the app loads these instantly when its settings match
     all_countries_<preset>_draws.csv   the all-country total in each of the 400 draws (the All Countries range)
+    allocation/*.csv     the Reallocation page's results (allocation_model.py; refreshed with the all-country files)
 
 Everything is in constant 2023 US$ unless noted. IHME DAH values are in thousands of US$.
 """
@@ -587,6 +588,10 @@ def precompute_all():
         res.to_csv(path, index=False)
         pd.DataFrame(res.attrs["draw_totals"]).rename_axis("draw").to_csv(scn.precomputed_draws_path(OUT, preset))
         print(f"  {path.name}: {len(res)} countries, {res['deaths_5y'].sum():,.0f} extra deaths over 5 years")
+    # the Reallocation page's results run on the same engine, so they are refreshed with it
+    import allocation_model
+    print("refreshing the allocation model results (model_data/allocation/) ...")
+    allocation_model.main([])
 
 
 if __name__ == "__main__":
@@ -599,7 +604,7 @@ if __name__ == "__main__":
     p.add_argument("--kff", default=str(KFF_MOU_FILE), help="KFF America First MOU tracker table (signed MOUs)")
     p.add_argument("--download", action="store_true")
     p.add_argument("--precompute-only", action="store_true",
-                   help="skip the rebuild and only refresh model_data/all_countries_<preset>.csv")
+                   help="skip the rebuild and only refresh model_data/all_countries_<preset>.csv and model_data/allocation/")
     args = p.parse_args()
     if not args.precompute_only:
         missing = [f"--{k}" for k in ("dah", "spend", "expected", "gdp") if not getattr(args, k)]
