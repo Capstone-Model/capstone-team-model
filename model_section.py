@@ -1132,11 +1132,11 @@ def _country_results(iso3, country_name, ctl, sk, imf):
                      "money lost.")
     notes += [f"{f[0].upper() + f[1:]}." for f in res["flags"]]
     notes.append("Money and people are yearly averages over 2026-2030 (constant 2023 US$); coverage is today -> 2030, "
-                 "as in the charts above, with the 2026-2030 average underneath; extra deaths are the total "
+                 "as in the charts above; extra deaths are the total "
                  "over 2026-2030 (deaths set in motion that fall in 2031-2035 are not included). HIV prevention turns "
                  "money into infections averted; deaths from those infections are counted in the year they happen "
-                 "(few before 2031). " + systems_note(ptab) + " HIV Testing & Care has no patients of its own: "
-                 + care_ct_note() + " Vaccine deaths: VIMC deaths averted per fully immunized child by country and "
+                 "(few before 2031). " + systems_note(ptab) + " HIV testing & care has no patients of its own, so it has no row: "
+                 + care_ct_note() + " Its money is in Other Aid." + " Vaccine deaths: VIMC deaths averted per fully immunized child by country and "
                  "antigen (DTP, polio and BCG are not in VIMC and are excluded). Deaths ranges: " + RANGE_LABEL + ". "
                  + RANGE_TIP)
     st.subheader("What Each Service Loses", help=_esc(" ".join(notes)))
@@ -1453,12 +1453,6 @@ def care_ct_note() -> str:
             f"{float(k['low']):.0%}-{float(k['high']):.0%}).")
 
 
-def care_ct_tip() -> str:
-    return ("HIV testing, counselling, care and support have no patients of their own in the model. Cutting them means "
-            "fewer people diagnosed and kept in care, so fewer on ART: " + care_ct_note()
-            + " Those people are counted in the HIV Treatment row.")
-
-
 def _service_rows(show: pd.DataFrame) -> pd.DataFrame:
     """Lines as shown to readers: support for orphans and vulnerable children dropped (it has no modelled effect on
     deaths). Bednets and indoor spraying are separate rows, each with its own coverage (MAP ITN use and MAP household
@@ -1519,6 +1513,10 @@ def _service_table_html(rows: pd.DataFrame, country_name: str = "", T: dict | No
     e = html.escape
     grey = lambda t: f"<span class='sub'>{t}</span>"
     nm = f"<span class='nm'>{e('Not Modelled')}</span>"
+    # HIV testing & care has no patients of its own (its effect is counted in HIV Treatment, I-09), so it gets no row;
+    # its money is folded into Other Aid below, keeping the money columns adding up to the headline figures
+    care_ct = rows[rows["line"].isin(hm.LINKED)]
+    rows = rows[~rows["line"].isin(hm.LINKED)]
     head = [("Service", ""), ("Donor Aid Now", AID_LABEL["table_base"]), ("Aid Lost", AID_LABEL["table_lost"]),
             ("Cost per Person", ""), ("People Losing Service, per Year", ""), ("Coverage", f"now → {LAST_YEAR}"),
             ("Extra Deaths, 2026-2030 Total", "")]
@@ -1532,16 +1530,9 @@ def _service_table_html(rows: pd.DataFrame, country_name: str = "", T: dict | No
         prev = r.bucket
         service = (f"<td class='svc' style='border-left:3px solid {col}'><span class='dot' style='background:{col}'>"
                    f"</span><b>{e(r.name)}</b><br>{grey(e(r.detail))}</td>")
-        dash = f"<span class='nm' title='{e(care_ct_tip(), quote=True)}'>–</span>"
-        if r.line in hm.LINKED:                        # HIV testing & care: works through ART (I-09)
-            cells = [money(r.base_usd), money(r.net_loss_usd), "<span class='big'>–</span>", dash, dash,
-                     f"<span class='nm' title='{e(care_ct_tip(), quote=True)}'>In HIV<br>Treatment</span>"]
-            body.append("<tr>" + service + "".join(f"<td>{c}</td>" for c in cells) + "</tr>")
-            continue
         if r.cov_ok:
             src = f"<br>{grey(e('(' + r.cov_source + ')'))}" if r.cov_source else ""
-            avg = grey(f"avg {AVG_SHORT}: {cov_pair(r.cov0, r.after_avg).split(' → ')[1]}")
-            cov = f"{cov_pair(r.cov0, r.after)}{src}<br><span class='drop'>{_pts(r.drop)}</span><br>{avg}"
+            cov = f"{cov_pair(r.cov0, r.after)}{src}<br><span class='drop'>{_pts(r.drop)}</span>"
         elif r.line == "hiv_prev":
             cov = "<span class='nm'>No Single<br>Target Group</span>"
         else:
@@ -1567,9 +1558,7 @@ def _service_table_html(rows: pd.DataFrame, country_name: str = "", T: dict | No
                 else e(short).replace('per infection averted', 'per infection<br>averted'))
         cells = [money(r.base_usd), money(r.net_loss_usd), f"<span class='big'>{e(r.cost_big)}</span><br>{grey(unit)}",
                  people, cov, deaths]
-        muted = r.cov_ok and small_drop(r.drop)
-        body.append((f"<tr class='small' title='{e(SMALL_TIP, quote=True)}'>" if muted else "<tr>") + service
-                    + "".join(f"<td>{c}</td>" for c in cells) + "</tr>")
+        body.append("<tr>" + service + "".join(f"<td>{c}</td>" for c in cells) + "</tr>")
     if prev is not None:
         body += _gain_rows(prev, gains)
     # Other Aid: money with no modelled service effect, so the money columns add up to the headline figures
@@ -1580,7 +1569,7 @@ def _service_table_html(rows: pd.DataFrame, country_name: str = "", T: dict | No
         if max(o_base, o_net) >= 0.005 * max(T["base"], 1.0):
             body.append("<tr class='gap'><td colspan='7'></td></tr>")
             body.append("<tr><td class='svc' style='border-left:3px solid #cfcad6'><b>Other Aid</b><br>"
-                        f"{grey(_other_aid_sub())}</td>"
+                        f"{grey(e(_other_aid_sub(not care_ct.empty)))}</td>"
                         + "".join(f"<td>{c}</td>" for c in (money(max(o_base, 0)), money(max(o_net, 0)), "", nm, "",
                                                             nm))
                         + "</tr>")
@@ -1596,10 +1585,11 @@ def _service_table_html(rows: pd.DataFrame, country_name: str = "", T: dict | No
             + "".join(body) + "</tbody></table></div>").replace("$", "&#36;")
 
 
-def _other_aid_sub() -> str:
-    """The grey line under the service table's Other Aid row."""
-    return ("overhead: systems, management" if hm.TREAT_SHARE is not None
+def _other_aid_sub(care_ct: bool = False) -> str:
+    """The grey line under the service table's Other Aid row (HIV testing & care is named when it is folded in)."""
+    base = ("overhead: systems, management" if hm.TREAT_SHARE is not None
             else "orphan support; systems money not cutting services")
+    return ("HIV testing & care (counted in HIV Treatment); " + base) if care_ct else base
 
 
 def _gain_rows(bucket, gains) -> list:
@@ -1622,7 +1612,6 @@ AID_LABEL = {
     "fiscal": lambda what: f"{what.lower() if what.startswith('All') else what}, average "
                            f"{scn.YEARS[0]}-{str(scn.YEARS[-1])[2:]}, before government replacement",
 }
-AVG_SHORT = "2026-30"
 
 
 def _model_years(rows: pd.DataFrame) -> list:
@@ -1679,13 +1668,6 @@ def _coverage_path_fig(rows: pd.DataFrame):
 
 
 COV_TICKS = [0, 25, 50, 75, 100]      # the same coverage axis on every service chart
-SMALL_DROP = 0.5                       # coverage change (points, rounded to 0.1) at or below this: row shown muted
-SMALL_TIP = "Coverage changes by 0.5 percentage points or less by 2030."
-
-
-def small_drop(drop: float) -> bool:
-    """A coverage change that rounds to 0.5 points or less (rows are muted, not removed)."""
-    return drop == drop and round(abs(drop), 1) <= SMALL_DROP
 DROP_ALERT, DROP_WATCH = 10.0, 5.0     # coverage drop by the last year, percentage points: needs help / watch
 
 
@@ -1714,9 +1696,8 @@ def _drop_overview_html(rows: pd.DataFrame) -> str:
         return "<p>No service loses coverage in this scenario.</p>"
     y1 = paths[0][1][-1]
     tag = lambda d: "Needs help" if d >= DROP_ALERT else "Watch" if d >= DROP_WATCH else "Holding"  # noqa: E731
-    muted = lambda d: " style='opacity:0.5'" if small_drop(d) else ""  # noqa: E731
     li = "".join(
-        f"<tr{muted(d)}><td style='padding:2px 10px 2px 0'><span style='display:inline-block;width:10px;height:10px;"
+        f"<tr><td style='padding:2px 10px 2px 0'><span style='display:inline-block;width:10px;height:10px;"
         f"border-radius:50%;background:{_drop_color(d)};margin-right:6px'></span><b>{html.escape(r.name)}</b></td>"
         f"<td style='padding:2px 10px;white-space:nowrap'>{cov_pair(r.cov0, cov[-1] / 100)}</td>"
         f"<td style='padding:2px 10px;white-space:nowrap;color:{_drop_color(d)};font-weight:600'>{_pts(d)}</td>"

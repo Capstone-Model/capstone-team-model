@@ -63,7 +63,8 @@ def test_service_table_care_row(ihme_split):
     rows = ms._service_rows(L[(L["base_usd"] > 0) | (L["net_loss_usd"] != 0)])
     assert list(rows["line"])[:2] == ["hiv_art", "hiv_care_ct"]
     html = ms._service_table_html(rows, "Kenya", r["totals"])
-    assert "HIV Testing &amp; Care" in html and "counted as lost ART care" in html
+    # no row of its own (its effect is in HIV Treatment); its money is named under Other Aid
+    assert "<b>HIV Testing &amp; Care</b>" not in html and "HIV testing &amp; care (counted in HIV Treatment)" in html
     assert f"{KAPPA:.0%} of lost testing and care money is counted as lost ART care" in ms.care_ct_note()
 
 
