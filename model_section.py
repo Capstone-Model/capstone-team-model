@@ -1388,7 +1388,7 @@ def _loss_by_bucket_fig(B: pd.DataFrame, any_replaced: bool = False, n_rows: int
                              textfont=dict(color=INK), showlegend=False, hoverinfo="skip", cliponaxis=False))
     fig.update_layout(barmode="stack", bargap=gap)
     _layout(fig, h=h, title=_title(th.title_sub("Aid Lost per Year", AID_LABEL["bucket"]
-                                                + ("<br>Lighter = replaced by government" if any_replaced else ""))),
+                                                + ("<br>Darker = replaced by government" if any_replaced else ""))),
             margin=dict(l=10, r=20, t=50, b=10), xaxis=dict(range=[0, xmax]))
     return fig
 
@@ -1579,7 +1579,7 @@ def _service_table_html(rows: pd.DataFrame, country_name: str = "", T: dict | No
         o_base, o_net = T["base"] - base_tot, T["net"] - net_tot
         if max(o_base, o_net) >= 0.005 * max(T["base"], 1.0):
             body.append("<tr class='gap'><td colspan='7'></td></tr>")
-            body.append("<tr><td class='svc' style='border-left:3px solid #cfcad6'><b>Other Aid</b><br>"
+            body.append(f"<tr><td class='svc' style='border-left:3px solid {th.OTHER}'><b>Other Aid</b><br>"
                         f"{grey(_other_aid_sub())}</td>"
                         + "".join(f"<td>{c}</td>" for c in (money(max(o_base, 0)), money(max(o_net, 0)), "", nm, "",
                                                             nm))
@@ -2170,7 +2170,7 @@ def cross_country(sk, ctl, iso3, names) -> pd.DataFrame:
         st.subheader(f"MOU Countries With Funding Data ({len(A)})",
                      help="America First MOUs is modelled only where the country has signed an MOU (KFF tracker) and "
                           "the team's sheet has its 2026-2030 US funding schedule. On the map, countries that signed "
-                          "without funding data are light grey; countries without an MOU are lighter grey.")
+                          "without funding data are grey; countries without an MOU are darker grey.")
     if "people_lost" not in A:                        # precomputed file older than the coverage columns
         A = _run_all(sk, ctl["fiscal_t"], ctl["ptab_json"], ctl["trend"]).assign(
             name=lambda d: d["iso3"].map(lambda c: names.get(c, c)))
@@ -2277,7 +2277,7 @@ def cross_country(sk, ctl, iso3, names) -> pd.DataFrame:
 
 def _world_map(A: pd.DataFrame, iso3: str, world: bool = False, groups: dict | None = None, names: dict | None = None):
     """People losing a service per 100,000 by country. With MOU groups (America First MOUs), countries outside the
-    modelled group are drawn in grey: signed without funding data (light) and no MOU (lighter)."""
+    modelled group are drawn in grey: signed without funding data (grey) and no MOU (darker grey)."""
     zmax = float(A["people_per_100k"].quantile(0.95))
     pct = A["loss_pct_ghes_pct"].map(lambda v: "n/a" if pd.isna(v) else f"{v:,.0f}%")
     fig = go.Figure(go.Choropleth(
@@ -2307,7 +2307,7 @@ def _world_map(A: pd.DataFrame, iso3: str, world: bool = False, groups: dict | N
                                     colorscale=[[0, "rgba(0,0,0,0)"], [1, "rgba(0,0,0,0)"]],
                                     marker_line_color=INK, marker_line_width=2, hoverinfo="skip"))
     fig.update_geos(projection_type="natural earth", showframe=False, showcoastlines=False, showcountries=True,
-                    countrycolor=th.SURFACE, countrywidth=0.5, showland=True, landcolor=th.RULE,
+                    countrycolor=th.SURFACE, countrywidth=0.5, showland=True, landcolor=th.SURFACE_TINT,
                     bgcolor=th.SURFACE, **(dict(lataxis_range=[-45, 75]) if world else MAP_FOCUS))
     _layout(fig, h=470, title=_title(th.title_sub("People Losing a Service per 100,000", "Each year")), margin=dict(l=0, r=0, t=40, b=50))
     return fig

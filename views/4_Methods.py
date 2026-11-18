@@ -195,13 +195,13 @@ with tabs[1]:
     "Unallocable" never do). Everything else is grouped as All Other Sources. IHME's "debt repayments" source is
     labelled World Bank Lending (Loan Repayments).
 
-    **NGO / foundation channels (lighter shade).** Money delivered through US NGOs (`NGO`), international NGOs
+    **NGO / foundation channels (darker shade).** Money delivered through US NGOs (`NGO`), international NGOs
     (`INTLNGO`), US foundations (`US_FOUND`) and the Gates Foundation directly (`GATES`) is drawn at 45% opacity.
     Bilateral agencies, the Global Fund, Gavi, UN agencies, development banks and the European Commission are drawn
     solid. IHME does not record whether a government knew about a flow; the channel is used as a proxy, and the
     Channel Settings button lets you change which channels count.
 
-    **Pills:** Total in 2023 = all aid that year; Via NGO / Foundation Channels = the lighter-shaded share; Largest
+    **Pills:** Total in 2023 = all aid that year; Via NGO / Foundation Channels = the darker-shaded share; Largest
     Funder = the source with the most aid in 2023.
 
     **Where the Aid Is Spent.** IHME splits aid by health focus area (`hiv`, `tb`, `mal`, `rmh`, `nch`, `oid`,

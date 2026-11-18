@@ -23,37 +23,47 @@ RANGE_TIP = ("Reflects uncertainty in model parameters only; uncertainty in the 
 # --------------------------------------------------------------------------- #
 # UI colors
 # --------------------------------------------------------------------------- #
-INK = "#1F1A2B"            # text
-MUTED = "#6B6478"          # secondary text
-RULE = "#ECE6F0"           # dividers, borders
-SURFACE = "#FFFFFF"
-SURFACE_TINT = "#FAF6FB"   # cards, pills
-BRAND = "#63458A"          # badges, active states
-BRAND_LIGHT = "#E4B7E5"
-ACCENT = "#9A48D0"         # links, highlights
+INK = "#FFFFFF"            # headings, numbers (text-primary)
+BODY = "#C9D1E8"           # running text: softer than pure white, easier to read at length (text-secondary)
+MUTED = "#8A96BA"          # secondary text (text-muted)
+RULE = "#34478A"           # dividers, borders (navy-600)
+GRID = "#24336E"           # chart gridlines: a step quieter than borders (navy-700)
+SURFACE = "#0B1230"        # page and chart background (navy-950)
+SURFACE_RAISED = "#121B45" # sticky header, control bars (navy-900)
+SURFACE_TINT = "#1A2657"   # cards, pills (navy-800)
+HOVER = "#24336E"          # hover, selected row (navy-700)
+YALE = "#00356B"
+CLEAR = "rgba(0,0,0,0)"     # chart backgrounds: show the page or card behind them
+BRAND = "#C9A43A"          # badges, active states (gold)
+BRAND_LIGHT = "#E6CF85"
+ACCENT = "#E6CF85"         # links, kickers (gold-light reads better than gold for small text)
+GOOD, WARN, BAD = "#5CBF8A", "#E3B341", "#E5645C"
 
 # --------------------------------------------------------------------------- #
-# Chart colors
+# Chart colors (series-1 ... series-6)
 # --------------------------------------------------------------------------- #
-GRAPE, ROSE, BLUE, TEAL, LILAC, PINK = "#6A3FA8", "#D9485F", "#3B7DD8", "#1D9A8A", "#9A48D0", "#E07AA8"
-PALETTE = [GRAPE, ROSE, BLUE, TEAL, LILAC, PINK]      # categorical order, color-blind checked
-OTHER = "#BDB6C8"
-AMBER = "#C7851F"          # Germany and health systems strengthening (lilac sat too close to grape)
-SPARE_FUNDER_COLORS = [PINK, "#8A6D3B", "#5B8DB8"]   # other funders in a country's top 6 (e.g. Japan in Iraq)
+# names kept from the old palette so call sites don't change; each is the nearest series color
+BLUE, AMBER, TEAL, ROSE, GRAPE, SLATE = "#6BAED6", "#E3B341", "#4DB6AC", "#E8806A", "#A394E6", "#B8C4DE"
+LILAC = GRAPE
+PINK = "#E08FB8"           # one extra hue for a sixth named funder (Private Philanthropy)
+PALETTE = [BLUE, AMBER, TEAL, ROSE, GRAPE, SLATE]     # categorical order
+OTHER = "#56628C"          # "All other" stays quiet against the navy, so the named series stand out
+SPARE_FUNDER_COLORS = [SLATE, "#C7A27A", "#7FA7C9"]   # other funders in a country's top 6 (e.g. Japan in Iraq)
 TOP_FUNDERS = 6
 GENERIC_SOURCES = {"Other", "Unallocable", "Other OECD DAC countries", "Non OECD DAC countries",
                    "Non OECD non DAC countries"}          # never given their own color; they stay in All Other Sources
 DISEASE_COLORS = {"HIV": ROSE, "TB": GRAPE, "Malaria": BLUE, "Immunization": TEAL}
 
 OTHER_SOURCES = "All Other Sources"
-FUNDER_COLORS = {"United States": GRAPE, "Gates Foundation": TEAL, "Private Philanthropy": PINK,
-                 "United Kingdom": BLUE, "Germany": AMBER, "France": ROSE, OTHER_SOURCES: OTHER}
+FUNDER_COLORS = {"United States": BLUE, "Gates Foundation": TEAL, "Private Philanthropy": PINK,
+                 "United Kingdom": GRAPE, "Germany": AMBER, "France": ROSE, OTHER_SOURCES: OTHER}
 # source names used by the IHME files and the model, mapped onto the six named funders
 FUNDER_ALIASES = {"Private other": "Private Philanthropy", "Corporate donations": "Private Philanthropy",
                   "Other private": "Private Philanthropy"}
 
-MAP_RAMP = ["#F3E6F4", "#E4B7E5", "#C58FD6", "#9A48D0", "#63458A", "#3E2466"]   # light to dark
-DEEP = MAP_RAMP[-1]
+# low values sit close to the navy background, high values are bright
+MAP_RAMP = ["#22336A", "#2C5486", "#3F7BAF", "#6BAED6", "#A6CFE8", "#DDEEF8"]
+DEEP = "#3F7BAF"           # a deeper blue (borrowing): darker than BLUE, still visible on navy
 
 
 def funder_group(source: str) -> str:
@@ -79,11 +89,22 @@ def tint(hex_color: str, alpha: float) -> str:
     return f"rgba({r},{g},{b},{alpha})"
 
 
+def text_on(color: str) -> str:
+    """Label color for text drawn on a filled box: dark navy on light fills, white on dark ones. Takes #hex or rgb()."""
+    if color.startswith("#"):
+        h = color.lstrip("#")
+        r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
+    else:
+        r, g, b = (float(v) for v in re.findall(r"[\d.]+", color)[:3])
+    lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255
+    return SURFACE if lum > 0.5 else INK
+
+
 def blend(hex_color: str, alpha: float) -> str:
-    """The color mixed with white (opaque), as rgb(): looks like tint() on white, but stays the same when drawn over
-    another color (treemap children sit on top of their parent box)."""
-    h = hex_color.lstrip("#")
-    r, g, b = (round(int(h[i:i + 2], 16) * alpha + 255 * (1 - alpha)) for i in (0, 2, 4))
+    """The color mixed with the page background (opaque), as rgb(): looks like tint() on the page, but stays the same
+    when drawn over another color (treemap children sit on top of their parent box)."""
+    h, bg = hex_color.lstrip("#"), SURFACE.lstrip("#")
+    r, g, b = (round(int(h[i:i + 2], 16) * alpha + int(bg[i:i + 2], 16) * (1 - alpha)) for i in (0, 2, 4))
     return f"rgb({r},{g},{b})"
 
 
@@ -104,13 +125,13 @@ _axis = dict(showgrid=False, zeroline=False, showline=False, ticks="", automargi
 pio.templates["editorial"] = go.layout.Template(
     layout=dict(
         font=dict(family=SANS, size=12, color=INK),
-        paper_bgcolor=SURFACE, plot_bgcolor=SURFACE, colorway=PALETTE,
+        paper_bgcolor=CLEAR, plot_bgcolor=CLEAR, colorway=PALETTE,
         title=dict(font=dict(family=SANS, size=15, color=INK), x=0, xanchor="left", xref="container",
                    pad=dict(l=10)),
-        xaxis=_axis, yaxis={**_axis, "showgrid": True, "gridcolor": RULE, "gridwidth": 1},
+        xaxis=_axis, yaxis={**_axis, "showgrid": True, "gridcolor": GRID, "gridwidth": 1},
         legend=dict(orientation="h", yanchor="top", y=-0.15, xanchor="left", x=0, title_text="", traceorder="normal",
                     font=dict(family=SANS, size=12, color=MUTED)),
-        hoverlabel=dict(bgcolor=SURFACE, bordercolor=RULE, font=dict(family=SANS, size=13, color=INK)),
+        hoverlabel=dict(bgcolor=SURFACE_TINT, bordercolor=RULE, font=dict(family=SANS, size=13, color=INK)),
         colorscale=dict(sequential=[[i / (len(MAP_RAMP) - 1), c] for i, c in enumerate(MAP_RAMP)]),
         margin=dict(l=10, r=10, t=50, b=10),
     ),
@@ -119,7 +140,7 @@ pio.templates["editorial"] = go.layout.Template(
 pio.templates.default = "editorial"
 
 
-ZERO_LINE = "#A9A1B5"        # darker than the gridlines
+ZERO_LINE = "#5A6A9E"        # stronger than the gridlines
 LEGEND_GAP_PX = 34           # legend top sits this far below the plot (room for the tick labels)
 
 
@@ -231,8 +252,8 @@ def style_fig(fig):
     """Apply the editorial look to a finished figure: fonts, title, gridlines on the value axis only (horizontal for
     vertical bars and lines, vertical for horizontal bars), a darker zero line, 2px white gaps between stacked
     segments, and the legend directly under the plot."""
-    fig.update_layout(template="editorial", plot_bgcolor=SURFACE, paper_bgcolor=SURFACE,
-                      font_family=SANS, hoverlabel=dict(bgcolor=SURFACE, bordercolor=RULE,
+    fig.update_layout(template="editorial", plot_bgcolor=CLEAR, paper_bgcolor=CLEAR,
+                      font_family=SANS, hoverlabel=dict(bgcolor=SURFACE_TINT, bordercolor=RULE,
                                                         font=dict(family=SANS, size=13, color=INK)))
     if fig.layout.title is not None and fig.layout.title.text:
         # left-aligned to the chart's own edge (not the plot area), so long y labels don't push the title out of view
@@ -255,7 +276,7 @@ def style_fig(fig):
         return fig                     # treemaps and maps have no axes
     horiz = _horizontal(fig)
     value_upd, cat_upd = (fig.update_xaxes, fig.update_yaxes) if horiz else (fig.update_yaxes, fig.update_xaxes)
-    value_upd(showgrid=True, gridcolor=RULE, gridwidth=1, zeroline=True, zerolinecolor=ZERO_LINE, zerolinewidth=1)
+    value_upd(showgrid=True, gridcolor=GRID, gridwidth=1, zeroline=True, zerolinecolor=ZERO_LINE, zerolinewidth=1)
     cat_upd(showgrid=False, zeroline=False)
     # legend directly under the plot: y is a fraction of the plot height, so convert the pixel gap
     if fig.layout.showlegend is not False and fig.layout.legend.orientation in (None, "h") \
@@ -276,7 +297,7 @@ CSS = f"""
 @import url('{FONTS_URL}');
 @import url('{ICONS_URL}');
 html, body, .stApp, .stMarkdown, button, input, select, textarea {{ font-family: {SANS}; }}
-.stApp {{ background: {SURFACE}; color: {INK}; }}
+.stApp {{ background: {SURFACE}; color: {BODY}; }}
 .stMainBlockContainer {{ max-width: 1150px; padding-top: 3.5rem; padding-bottom: 6rem; }}
 h1, h2, h3, h4 {{ font-family: {SERIF} !important; color: {INK}; letter-spacing: -0.01em; }}
 h2 {{ font-weight: 600 !important; }}
@@ -290,7 +311,7 @@ a {{ color: {ACCENT}; }}
 hr {{ border-color: {RULE} !important; }}
 
 /* metrics: quiet grey label, big serif number */
-[data-testid="stMetric"] {{ background: {SURFACE}; border-color: {RULE} !important; border-radius: 10px; }}
+[data-testid="stMetric"] {{ background: {SURFACE_TINT}; border-color: {RULE} !important; border-radius: 10px; }}
 [data-testid="stMetricLabel"] p {{ color: {MUTED}; font-size: 0.82rem; }}
 [data-testid="stMetricValue"] {{ font-family: {SERIF}; font-weight: 600; color: {INK}; }}
 [data-testid="stMetricDelta"] {{ color: {MUTED} !important; }}
@@ -300,16 +321,17 @@ hr {{ border-color: {RULE} !important; }}
 
 /* Streamlit's own top bar (with the page links) is opaque, so nothing shows through above the sticky header */
 [data-testid="stHeader"] {{ background: {SURFACE}; }}
+[data-testid="stSidebar"] {{ background: {SURFACE_RAISED}; }}
 
 /* sticky country header (Streamlit wraps the container in a layout div of the same height, so that is what sticks;
    top = height of Streamlit's own top bar) */
 [data-testid="stLayoutWrapper"]:has(> .st-key-hdr), .st-key-hdr {{ position: sticky; top: 3.75rem; z-index: 999; }}
 [data-testid="stLayoutWrapper"]:has(> .st-key-hdr) {{ margin-bottom: 24px; }}
-.st-key-hdr {{ background: {SURFACE}; border-bottom: 1px solid {RULE}; box-shadow: 0 2px 8px rgba(31,26,43,0.06);
+.st-key-hdr {{ background: {SURFACE_RAISED}; border-bottom: 1px solid {RULE}; box-shadow: 0 4px 14px rgba(0,0,0,0.28);
                padding: 0.5rem 20px 20px !important; }}      /* side padding keeps text off the edges */
 /* a short white fade under the border, so content sliding under the header never butts up against it */
 .st-key-hdr::after {{ content: ""; position: absolute; left: 0; right: 0; top: calc(100% + 1px); height: 14px;
-                      background: linear-gradient({SURFACE}, rgba(255,255,255,0)); pointer-events: none; }}
+                      background: linear-gradient(rgba(11,18,48,0.9), rgba(11,18,48,0)); pointer-events: none; }}
 .ed-country {{ font-family: {SERIF}; font-size: 36px; font-weight: 600; line-height: 1.05; color: {INK};
                margin: 0 0 0.5rem; letter-spacing: -0.015em; }}
 
@@ -381,7 +403,7 @@ hr {{ border-color: {RULE} !important; }}
 .ed-table {{ width: 100%; border-collapse: collapse; font-size: 14px; margin: 0.3rem 0 0.4rem; }}
 .ed-table th {{ color: {MUTED}; font-weight: 600; font-size: 12.5px; text-align: left; padding: 8px 10px;
                 border-bottom: 1px solid {RULE}; vertical-align: bottom; }}
-.ed-table td {{ padding: 9px 10px; border-bottom: 1px solid {RULE}; vertical-align: top; color: {INK}; }}
+.ed-table td {{ padding: 9px 10px; border-bottom: 1px solid {RULE}; vertical-align: top; color: {BODY}; }}
 .ed-table .num {{ text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }}
 .ed-table .cov {{ white-space: nowrap; }}
 .ed-table .drop {{ color: {ROSE}; font-weight: 700; }}
@@ -389,7 +411,7 @@ hr {{ border-color: {RULE} !important; }}
 
 /* "what each service loses": NYT-style table */
 .ed-nyt-wrap {{ overflow-x: auto; margin: 0.2rem 0 0.4rem; }}
-.ed-nyt {{ width: 100%; min-width: 980px; border-collapse: collapse; table-layout: fixed; font-size: 14px; color: {INK};
+.ed-nyt {{ width: 100%; min-width: 980px; border-collapse: collapse; table-layout: fixed; font-size: 14px; color: {BODY};
            font-family: {SANS}; }}
 .ed-nyt th {{ font-size: 12px; font-weight: 600; color: {MUTED}; text-align: center; vertical-align: bottom;
               padding: 0 8px 10px; border-bottom: 1px solid {RULE}; line-height: 1.3; }}
@@ -397,7 +419,7 @@ hr {{ border-color: {RULE} !important; }}
 .ed-nyt td {{ text-align: center; white-space: nowrap; padding: 14px 8px; border-bottom: 1px solid {RULE};
               vertical-align: middle; line-height: 1.35; font-variant-numeric: tabular-nums; }}
 .ed-nyt td.svc {{ text-align: left; white-space: normal; padding-left: 12px; }}
-.ed-nyt tbody tr:not(.gap):not(.tot):hover td {{ background: {SURFACE_TINT}; }}
+.ed-nyt tbody tr:not(.gap):not(.tot):hover td {{ background: {HOVER}; }}
 .ed-nyt tr.small td {{ opacity: 0.5; }}
 .ed-cap {{ font-size: 14px; line-height: 1.5; color: {MUTED}; cursor: help; margin: 0.2rem 0 1rem; }}
 .ed-nyt .sub {{ font-size: 12px; color: {MUTED}; font-weight: 400; white-space: normal; }}
@@ -407,9 +429,9 @@ hr {{ border-color: {RULE} !important; }}
 .ed-nyt .dot {{ display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 7px;
                 vertical-align: 1px; }}
 .ed-nyt .drop {{ display: inline-block; margin-top: 3px; padding: 1px 8px; border-radius: 999px; font-size: 12px;
-                 font-weight: 700; color: {ROSE}; background: rgba(217,72,95,0.10); }}
+                 font-weight: 700; color: {ROSE}; background: rgba(232,128,106,0.14); }}
 .ed-nyt tr.gap td {{ padding: 0; height: 8px; border-bottom: none; }}
-.ed-nyt tr.tot td {{ border-top: 2px solid {INK}; border-bottom: none; }}
+.ed-nyt tr.tot td {{ border-top: 2px solid {MUTED}; border-bottom: none; }}
 
 /* service cards (every US$1M lost) */
 .ed-card {{ background: {SURFACE_TINT}; border: 1px solid {RULE}; border-top: 4px solid; border-radius: 10px;
@@ -445,31 +467,31 @@ hr {{ border-color: {RULE} !important; }}
 }}
 
 /* the funding-cut model control bar */
-.st-key-model_controls {{ background: {SURFACE_TINT}; border-color: {RULE} !important; border-radius: 12px; }}
-/* ---- dropdowns: white with a visible border (and a purple border on hover / focus), so they read as controls on
-   both the white page and the tinted scenario bar ---- */
+.st-key-model_controls {{ background: {SURFACE_RAISED}; border-color: {RULE} !important; border-radius: 12px; }}
+/* ---- dropdowns: a raised navy box with a visible border (gold on hover / focus), so they read as controls on
+   both the page and the scenario bar ---- */
 [data-testid="stSelectbox"] .react-aria-ComboBox > div, [data-baseweb="select"] > div {{
-    background-color: {SURFACE} !important; border: 1px solid #B8AEC6 !important; border-radius: 8px !important;
-    box-shadow: 0 1px 2px rgba(31,26,43,0.06); }}
+    background-color: {SURFACE_TINT} !important; border: 1px solid {RULE} !important; border-radius: 8px !important;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.25); }}
 [data-testid="stSelectbox"] .react-aria-ComboBox > div:hover, [data-baseweb="select"] > div:hover {{
     border-color: {BRAND} !important; }}
 [data-testid="stSelectbox"] .react-aria-ComboBox > div:focus-within, [data-baseweb="select"] > div:focus-within {{
-    border-color: {BRAND} !important; box-shadow: 0 0 0 2px {BRAND_LIGHT} !important; }}
+    border-color: {BRAND} !important; box-shadow: 0 0 0 2px rgba(201,164,58,0.35) !important; }}
 [data-testid="stSelectbox"] .react-aria-ComboBox button svg, [data-baseweb="select"] svg {{ color: {BRAND} !important; }}
-.st-key-model_controls {{ background: {SURFACE_TINT}; border-radius: 12px; padding: 12px 16px 6px !important; }}
-.st-key-alloc_controls {{ background: {SURFACE_TINT}; border-color: {RULE} !important; border-radius: 12px;
+.st-key-model_controls {{ background: {SURFACE_RAISED}; border-radius: 12px; padding: 12px 16px 6px !important; }}
+.st-key-alloc_controls {{ background: {SURFACE_RAISED}; border-color: {RULE} !important; border-radius: 12px;
                           padding: 12px 16px 12px !important; margin: 4px 0 8px; }}
 
 /* ---- funding-path sliders: red = aid cut, blue = extra health share; the year in bold above each column ---- */
 .ed-year {{ font-family: {SANS}; font-weight: 700; font-size: 14px; color: {INK}; text-align: center; margin-bottom: -6px; }}
-/* Streamlit draws the slider fill and thumb in the theme purple (fill % is in its own CSS), so they are re-coloured
-   with a filter: purple -> rose for the aid cut, purple -> blue for the extra health share */
+/* Streamlit draws the slider fill and thumb in the theme gold (fill % is in its own CSS), so they are re-coloured
+   with a filter: gold -> coral for the aid cut, gold -> blue for the extra health share */
 [class*="st-key-cutsl_"] [role="group"] > div > div:first-child,
 [class*="st-key-cutsl_"] div:has(> [data-testid="stSliderThumbValue"]) {{
-    filter: hue-rotate(84deg) saturate(1.7) brightness(1.4); }}
+    filter: hue-rotate(-34deg) saturate(1.25) brightness(1.1); }}
 [class*="st-key-govsl_"] [role="group"] > div > div:first-child,
 [class*="st-key-govsl_"] div:has(> [data-testid="stSliderThumbValue"]) {{
-    filter: hue-rotate(-50deg) saturate(1.4) brightness(1.35); }}
+    filter: hue-rotate(157deg) saturate(0.85) brightness(1.15); }}
 [class*="st-key-cutsl_"] [data-testid="stWidgetLabel"] p {{ color: {ROSE}; font-weight: 600; font-size: 12px; }}
 [class*="st-key-govsl_"] [data-testid="stWidgetLabel"] p {{ color: {BLUE}; font-weight: 600; font-size: 12px; }}
 
@@ -478,7 +500,7 @@ hr {{ border-color: {RULE} !important; }}
 [data-testid="stStatusWidget"], [data-testid="stToolbarActions"], footer {{ display: none !important; }}
 
 /* ---- running text uses the full width of the page, like the charts ---- */
-[data-testid="stMarkdownContainer"] > p {{ font-size: 16.5px; line-height: 1.6; }}
+[data-testid="stMarkdownContainer"] > p {{ font-size: 16.5px; line-height: 1.6; color: {BODY}; }}
 
 /* ---- story lede (top of the Dashboard) ---- */
 .ed-lede {{ margin: 4px 0 6px; }}
@@ -491,14 +513,14 @@ hr {{ border-color: {RULE} !important; }}
 #change-scenario {{ scroll-margin-top: 230px; }}       /* lands below the sticky header */
 .ed-headline {{ font-family: {SERIF}; font-size: 36px; line-height: 1.18; font-weight: 600; color: {INK};
                 letter-spacing: -0.01em; margin: 0 0 18px; text-wrap: balance; max-width: 30em; }}
-.ed-dek {{ font-family: {SANS}; font-size: 19px; line-height: 1.5; color: #4A4458; margin: 0 0 26px; }}
-.ed-bignums {{ display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 1px solid {INK};
+.ed-dek {{ font-family: {SANS}; font-size: 19px; line-height: 1.5; color: {BODY}; margin: 0 0 26px; }}
+.ed-bignums {{ display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 1px solid {MUTED};
                border-bottom: 1px solid {RULE}; margin: 0 0 18px; }}
 .ed-bignum {{ padding: 14px 18px 16px 0; }}
 .ed-bignum + .ed-bignum {{ border-left: 1px solid {RULE}; padding-left: 18px; }}
 .ed-bignum .v {{ font-family: {SERIF}; font-size: 40px; font-weight: 600; line-height: 1.05; color: {INK}; }}
 .ed-bignum .v.hl {{ color: {ROSE}; }}
-.ed-bignum .l {{ font-size: 13px; font-weight: 600; color: {INK}; margin-top: 6px; }}
+.ed-bignum .l {{ font-size: 13px; font-weight: 600; color: {BODY}; margin-top: 6px; }}
 .ed-bignum .n {{ font-size: 12.5px; color: {MUTED}; margin-top: 2px; }}
 @media (max-width: 720px) {{
   .ed-headline {{ font-size: 26px; }}
@@ -536,11 +558,11 @@ hr {{ border-color: {RULE} !important; }}
 /* wide tables keep their first column in view while the rest scrolls sideways */
 .ed-nyt.sticky td.svc, .ed-nyt.sticky th:first-child {{ position: sticky; left: 0; z-index: 1; background: {SURFACE};
     box-shadow: 1px 0 0 {RULE}; }}
-.ed-nyt.sticky tr:hover td.svc {{ background: {SURFACE_TINT}; }}
+.ed-nyt.sticky tr:hover td.svc {{ background: {HOVER}; }}
 @media (max-width: 720px) {{ .ed-nyt.sticky col:first-child {{ width: 150px !important; }} }}
 /* three explainer cards in a row (one column on a phone) */
 .ed-cards.three {{ grid-template-columns: repeat(3, minmax(0, 1fr)); }}
-.ed-card .why {{ font-size: 14px; line-height: 1.5; color: #4A4458; margin-top: 10px; }}
+.ed-card .why {{ font-size: 14px; line-height: 1.5; color: {BODY}; margin-top: 10px; }}
 @media (max-width: 720px) {{ .ed-cards.three {{ grid-template-columns: 1fr; }} }}
 /* the big numbers under a headline: two by two on a phone */
 @media (max-width: 720px) {{
@@ -558,7 +580,7 @@ hr {{ border-color: {RULE} !important; }}
 /* ---- "Source:" line under every chart ---- */
 .ed-source {{ font-family: {SANS}; font-size: 12px; color: {MUTED}; margin: -10px 0 6px;
               line-height: 1.45; }}
-.ed-source b {{ font-weight: 600; color: #4A4458; }}
+.ed-source b {{ font-weight: 600; color: {BODY}; }}
 </style>
 """
 

@@ -95,7 +95,7 @@ _OTHER_FUNCS = ["Social protection", "Education", "General public services", "Ec
                 "Public order and safety", "Housing and community amenities", "Environmental protection",
                 "Recreation, culture and religion"]
 OTHER_FUNCS = dict(zip(_OTHER_FUNCS, [th.blend(th.MUTED, a) for a in (0.62, 0.5, 0.56, 0.44, 0.38, 0.32, 0.27, 0.23, 0.2)]))
-OTHER_FUNCS["Interest on public debt"] = th.BRAND
+OTHER_FUNCS["Interest on public debt"] = th.blend(th.BRAND, 0.7)   # softened gold: a large box
 MACRO_DIR = ROOT / "macro_data"          # IMF WEO: GDP, population, debt, per ISO3
 REVENUE_DIR = ROOT / "revenue_data"      # IMF WoRLD: government revenue by type, per ISO3
 # revenue: taxes in blues, everything else in teals
@@ -467,6 +467,7 @@ def _budget_section():
     fig4 = go.Figure(go.Treemap(
         ids=ids, labels=labels, parents=parents, values=values, branchvalues="total", text=texts,
         marker=dict(colors=colors_, line=dict(width=2, color=th.SURFACE)), customdata=hov, textinfo="label+text",
+        textfont=dict(color=[th.text_on(c) for c in colors_]),
         hovertemplate="<b>%{label}</b><br>%{customdata}<extra></extra>", sort=False,
     ))
     fig4.update_layout(title=dict(text=f"Government Revenue and Spending, {int(yr4)}"), height=720,
@@ -620,7 +621,7 @@ else:
                 value_col, metric_label = pa, f"{HFA_LABELS[hfa]}: {pas[pa]}"
     with c3, st.popover("Channel Settings", icon=":material/tune:", width="stretch"):
         nongov = st.multiselect(
-            "Channels Drawn as NGO / Foundation (Lighter Shade)",
+            "Channels Drawn as NGO / Foundation (Darker Shade)",
             options=list(CHANNEL_LABELS), default=DEFAULT_NONGOV_CHANNELS, key="c1_ngo",
             format_func=lambda c: title_case(f"{CHANNEL_LABELS[c]} ({c})"),
             help="IHME doesn't record whether a government knew about a flow. "
@@ -648,7 +649,7 @@ else:
     named = [x for x in th.FUNDER_COLORS if x != th.OTHER_SOURCES]
     window = window.assign(source=window["source"].where(window["source"].isin(named + extra), th.OTHER_SOURCES))
     agg = window.groupby(["year", "source", "route"], as_index=False)["val"].sum()
-    # which organizations the lighter-shaded money went through, per bar (for hover text)
+    # which organizations the darker-shaded money went through, per bar (for hover text)
     ngo_detail = (window[window["route"] == "ngo"].groupby(["year", "source", "channel"])["val"].sum().reset_index())
     ngo_detail = ngo_detail[ngo_detail["val"] > 0]
     ngo_detail["txt"] = ngo_detail["channel"].map(lambda c: CHANNEL_LABELS.get(c, c)) + ": " + ngo_detail["val"].map(fmt_usd).astype(str)
@@ -671,7 +672,7 @@ else:
     else:
         st.info("No funding recorded for this selection.")
 
-    # every trace gets the same x values (every year), so solid and lighter segments stack in one column per year
+    # every trace gets the same x values (every year), so solid and darker segments stack in one column per year
     years = list(range(YEAR_MIN, last_data_year + 1))
     fig = go.Figure()
     for s in order:
@@ -681,7 +682,7 @@ else:
             if sub.empty:
                 continue
             sub = sub.set_index("year")[["val"]].reindex(years).reset_index()     # missing years -> NaN (no bar)
-            # same funder, lighter shade for NGO / foundation channels; no outline on any trace (all the same width)
+            # same funder, darker shade for NGO / foundation channels; no outline on any trace (all the same width)
             marker = dict(color=col if route == "gov" else th.tint(col, NGO_SHADE), line=dict(width=0))
             amts = [fmt_usd(v * unit_div) if pd.notna(v) else "" for v in sub["val"]]   # exact amount, own unit (M / B / T)
             if route == "ngo":
@@ -709,7 +710,7 @@ else:
                            text=f"{th.short_name(top_src)}: {latest.loc[latest['source'].map(lambda x: th.FUNDER_ALIASES.get(x, x)) == top_src, 'val'].sum() / tot:.0%}"
                                 f"<br>of {last_data_year} aid", font=dict(size=12, color=th.INK))
     chart(fig, labels=True, source="IHME Development Assistance for Health database (1990-2026 release); constant 2023 US$.",
-          note="Lighter shades are aid delivered through NGOs and foundations, a proxy for money that may bypass the "
+          note="Darker shades are aid delivered through NGOs and foundations, a proxy for money that may bypass the "
                "government.")
 
 

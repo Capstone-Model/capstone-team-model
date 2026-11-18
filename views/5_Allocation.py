@@ -43,7 +43,7 @@ SERVICE_NAMES = {"hiv_art": ("HIV Treatment (ART)", "people on ART"), "hiv_pmtct
                  "tb_ds": ("TB Treatment", "courses"), "tb_dr": ("Drug-Resistant TB Treatment", "courses"),
                  "mal_itn": ("Bednets", "people"), "mal_irs": ("Indoor Spraying", "people"),
                  "mal_cm": ("Malaria Testing & Treatment", "cases treated"), "imm": ("Routine Immunization", "children")}
-TIER_COLORS = {"High": "#3D3747", "Medium": "#857E92", "Low": "#B2AABF"}     # neutral: purple is TB and the brand
+TIER_COLORS = {"High": "#DDE3F0", "Medium": "#8A96BA", "Low": "#4A5884"}     # neutral greys, brightest = highest
 GAIN, LOSE = th.BLUE, th.ROSE
 SOURCE_NOTE = "Team allocation model; this dashboard's model."
 SHORT_RULE = {"cpl_need": "+ Cost per life + need (team plan)", "cpl": "+ Cost per life", "need": "+ Need",
