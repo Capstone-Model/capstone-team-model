@@ -144,7 +144,8 @@ with tabs[0]:
     th.section_header("event", "Data Years")
     md("""
     The model applies each input's latest year to 2026-2030 without projecting it forward. The years differ by
-    input: aid is the 2021-2023 average (IHME's last recipient-level years), while coverage is from 2024-2025.
+    input: aid is 2023 (IHME's last recipient-level year; the same year in the OECD data), while coverage is from
+    2024-2025.
     """)
     st.table(ms.data_years_table(I["ci"], sorted(set(I["lines"].iso3))))
 
@@ -252,7 +253,7 @@ with tabs[1]:
     md("""
     | Output | Definition |
     |---|---|
-    | Aid at Risk (per Year) | Yearly HIV, TB, malaria and vaccine aid removed by the scenario (gross loss), out of the 2021-2023 average |
+    | Aid at Risk (per Year) | Yearly HIV, TB, malaria and vaccine aid removed by the scenario (gross loss), out of 2023 aid |
     | Headline cards (top of the Dashboard) | Aid Lost (Net Aid Lost a year, 2026-2030 average); People Losing a Service (the service table's total); Largest Coverage Drop (coverage now → 2030, as in the coverage charts); Extra Deaths 2026-2030 with range. The People card's tooltip splits it into treatment (HIV treatment, PMTCT, TB treatment, malaria treatment) and prevention (bednet use, indoor spraying, childhood vaccination). Each counts the service the lost money would have paid for in a year (money lost ÷ cost per person). For HIV treatment this is patient-years of ART the lost money would have paid for, not a headcount of people who stop treatment |
     | Replaced by Government | The government's replacement, set by the response chosen, capped by fiscal space |
     | Net Aid Lost | Aid at risk minus what is replaced. It includes health-systems money (labs, staff, data systems, supply chain), which is above-site money already priced into the cost per patient, so it is not converted into lost services (`hss_service_share` = 0, a structural assumption held constant in the uncertainty runs; logic review L-05) |
@@ -262,7 +263,7 @@ with tabs[1]:
     | What Each Service Loses | Per service line: baseline aid, aid lost after replacement, cost per person, people losing the service per year (average over 2026-2030), with the 5-year total of people affected underneath (the yearly numbers added up, following the funding path; for HIV treatment, mostly the same people stay off ART each year, so no total is added), coverage now and in 2030 (as in the coverage charts and the headline card; the 2026-2030 average underneath), and extra deaths, 2026-2030 total (range; see *The Model, Step 4*). Aid Lost covers HIV, TB, malaria and vaccine aid only |
     | Can {{Country}} Fill the Gap? | The chart, from the same run as the headline, shows averages per year over 2026-2030 (and 2030 when it differs): the gap before the government steps in = aid lost (gross); filled by the government = the chosen response plus any gradual budget increase; gap left = the difference (= Net Aid Lost). The dashed line is backfill capacity (fiscal space), see *The Model, Step 2*. Aid Lost as % of Government Health Spending = average yearly gross loss ÷ government health spending in 2023; as % of revenue = that loss ÷ (GDP x revenue % of GDP, World Bank WDI). Health share of government spending: see *Gradual budget increase* |
     | All Countries | Totals add up country results; people losing a service per 100,000 = people-equivalents losing a service per year ÷ population x 100,000; budget exposure = gross loss ÷ government health spending |
-    | Reallocation | The team allocation model: the same projected 2026 aid pool for 82 countries, re-divided so each country's cut = λ x its capacity to replace aid (new tax revenue for health plus a budget shift) x 1/(1 + 4 x need) x 1/(1 + 4 x efficiency), never more than its 2023 aid, with λ set so the cuts add up to the OECD-projected total. Efficiency is lives saved per US$1M in this model. Four scenarios (current or reallocated aid, with or without new domestic money) run through this model for the 65 countries it covers. Built by `allocation_model.py` from the workbook in `ALLOCATION MODEL/`; the page lists its caveats |
+    | Reallocation | The team allocation model: the same projected 2026 aid pool for 82 countries, re-divided so each country's cut = λ x its capacity to replace aid (new tax revenue for health plus a budget shift) x 1/(1 + 4 x need) x 1/(1 + 4 x efficiency), never more than its 2023 aid, with λ set so the cuts add up to the selected data source's projected 2026 total (its workbook's By_Recipient sheet). Efficiency is lives saved per US$1M in this model. Four scenarios (current or reallocated aid, with or without new domestic money) run through this model for the 65 countries it covers. Built by `allocation_model.py` from the workbook in `ALLOCATION MODEL/`; the page lists its caveats |
     """)
 
 # =========================================================================== #
@@ -271,11 +272,28 @@ with tabs[1]:
 with tabs[2]:
     th.section_header("account_tree", "Step 1: Money (What Aid Is Lost)", rule=False)
     md("""
-    **Baseline.** For each country, the IHME aid database is summed by **source group x channel group x service
-    line** and averaged over 2021-2023. Each such combination is a *cell*.
+    **Two aid data sources.** The toggle at the top of every page switches between the team's two projection
+    workbooks. Both start from 2023 aid and apply the same announced cuts and rules to every recipient x donor x
+    channel flow (US America First MOUs, Global Fund GC7/GC8 allocations, Gavi 6.0 pledges, UK and Australian country
+    allocations, Swedish and UK exits, the German bilateral health exit, the Dutch health budget, and each donor's
+    OECD total-aid outlook for the rest). Only the aid data underneath differs:
+
+    | | IHME | OECD |
+    |---|---|---|
+    | Workbook | `IHME_aid_cut_projections_announcements.xlsx` | `OECD_aid_cut_projections.xlsx` |
+    | 2023 aid | IHME Development Assistance for Health (95 recipients) | OECD CRS gross health ODA disbursements, sectors 121, 122, 123 and 130, plus Gates (154 recipients) |
+    | Covers | Every donor IHME traces to a country, including money private NGOs and foundations raise themselves | What governments and multilaterals report to the OECD; multilaterals' own funds (IDA, EU, WHO, UNICEF, UNFPA, UNAIDS) are kept as their own donor |
+    | Split into services | Each flow's own 2023 IHME program areas (below) | Each flow's HIV, TB and malaria shares, split into services with the country's IHME 2023 mix for the same donor and channel; vaccines = the flow's child-health money x IHME's vaccine share of non-systems child health (Gavi: 100%) |
+
+    Neither workbook includes lending funded by debt repayments, China and other non-DAC donors, or Other /
+    unallocable money. Guyana and Panama have no 2023 IHME aid, so they can only be modelled with OECD data.
+
+    **Baseline.** For each country, the selected workbook's 2023 aid is summed by **source group x channel group x
+    service line**. Each such combination is a *cell*, and carries its own yearly cut from the workbook:
     """)
-    st.latex(r"\text{baseline}_{c} = \tfrac{1}{3}\sum_{y=2021}^{2023} \text{DAH}_{c,y}\times 1000 \quad"
-             r"\text{(IHME reports thousands of constant 2023 US\$)}")
+    st.latex(r"\text{cut}_{c,y} = 1 - \frac{\sum_{f \in c} \text{share}_{f,c}\,\text{Proj}_{f,y}}"
+             r"{\sum_{f \in c} \text{share}_{f,c}\,\text{Baseline}_{f}} \quad"
+             r"\text{(flows } f \text{ in the cell; share = the flow's money on that service line)}")
     md("""
     **Service lines** come from IHME program-area columns:
 
@@ -356,7 +374,7 @@ with tabs[2]:
     | America First MOUs | Only for countries with a signed MOU (KFF) **and** 2026-2030 US funding values in the team's sheet, plus Zambia's from its MOU table (17 countries). US direct aid follows the country's own schedule year by year: cut in year t = 1 - US funding in t ÷ 2021-25 reference, used exactly as written (never rescaled); a funding increase counts as a 0% cut; a schedule that eases later is followed as written (people return to care); where the schedule ends in 2028 (Botswana, South Sudan) the 2028 cut is held through 2030. US multilateral exits as above. Countries that signed without funding data list the scenario as unavailable; countries without an MOU don't offer it | KFF tracker (status); team's MOU / co-financing sheet (schedules) |
     | IHME 2025 Preliminary Estimates | Each source x channel x disease cell changes by IHME's 2025 preliminary total ÷ its 2021-23 average (global ratio applied to the country's mix; cells under US$20M a year use the source x disease ratio; clipped to 0-1.5) | IHME DAH database, 2025 preliminary estimates. Where a service line's aid rises, it counts as no loss (gains aren't modelled); the table notes the rise under that disease |
     | Total-Aid Cuts (OECD) Applied to Health Aid | Each donor's 2025 change in total aid (all sectors, not health-specific) applied to its health aid: US -57%, Germany -17.4%, France -10.9%, UK -10.8%, Japan -5.6% | OECD preliminary 2025 ODA data, April 2026 |
-    | Global Fund & Gavi Shortfalls | Every donor's money through Gavi and through the Global Fund falls by a share the user sets (0-50%; default Gavi -15%, Global Fund -20%), against each fund's 2021-23 disbursements (the model baseline). No US multilateral exit is added, so nothing is counted twice. Gavi: Gavi 6.0 raised more than US$9B for 2026-2030 (including leftover COVID funds and earlier pledges) vs a US$11.9B target, about US$1.75B a year in 2023 US$; that is about 15% below Gavi's 2021-23 spending excluding COVID (US$2.06B a year in IHME's data; our estimate). The 24% gap to the target is a shortfall against plans, not a fall in spending. Global Fund: Eighth Replenishment US$12.64B vs US$15.7B in the Seventh (about -20%) and a US$18B target (-30%); KFF finds MOU-country allocations down 15% vs the original GC7 allocations, and Aidspan's median allocation-letter cut is about -24%. All nominal; real cuts are somewhat deeper. The All Countries page uses the defaults | Gavi press release (June 2025), Devex, Donor Tracker (2026); Global Fund Board (Feb 2026); KFF (June 2026); Aidspan; IHME DAH database |
+    | Global Fund & Gavi Shortfalls | Every donor's money through Gavi and through the Global Fund falls by a share the user sets (0-50%; default Gavi -15%, Global Fund -20%), against each fund's disbursements in the model baseline (2023). No US multilateral exit is added, so nothing is counted twice. Gavi: Gavi 6.0 raised more than US$9B for 2026-2030 (including leftover COVID funds and earlier pledges) vs a US$11.9B target, about US$1.75B a year in 2023 US$; that is about 15% below Gavi's 2021-23 spending excluding COVID (US$2.06B a year in IHME's data; our estimate). The 24% gap to the target is a shortfall against plans, not a fall in spending. Global Fund: Eighth Replenishment US$12.64B vs US$15.7B in the Seventh (about -20%) and a US$18B target (-30%); KFF finds MOU-country allocations down 15% vs the original GC7 allocations, and Aidspan's median allocation-letter cut is about -24%. All nominal; real cuts are somewhat deeper. The All Countries page uses the defaults | Gavi press release (June 2025), Devex, Donor Tracker (2026); Global Fund Board (Feb 2026); KFF (June 2026); Aidspan; IHME DAH database |
     | Combined Retreat | US Bilateral Exit + Multilateral Withdrawals plus the OECD total-aid cuts for every other donor | As above |
     | Custom | Set by the user | |
     """)
@@ -729,7 +747,8 @@ with tabs[3]:
     md("""
     | Dataset | Provider and version | Variables used | Used in |
     |---|---|---|---|
-    | Development Assistance for Health | IHME, 1990-2026 (Sept 2026 release) | Aid (`dah_23`) by source, channel, recipient, focus and program area; 2025 preliminary totals | Section 2; model baseline (2021-23) and IHME 2025 scenario |
+    | Development Assistance for Health | IHME, 1990-2026 (Sept 2026 release) | Aid (`dah_23`) by source, channel, recipient, focus and program area; 2025 preliminary totals | Section 2; IHME 2025 scenario; the 2023 split of every flow into services (both data sources) |
+    | Announcement-based aid projections | The team's two workbooks: `IHME_aid_cut_projections_announcements.xlsx` and `OECD_aid_cut_projections.xlsx` (sheet Base_Projection) | 2023 aid and projected 2026-2030 aid by recipient x donor x channel, with each flow's rule and health-area shares | Model baseline and Announced donor cuts (IHME / OECD toggle); Reallocation 2023 and 2026 aid |
     | Global Health Spending | IHME, 1995-2023 | Government, prepaid private, out-of-pocket and aid spending: totals, per person, % of GDP | Section 1; government health spending and its growth (fiscal space) |
     | Expected Health Spending | IHME, 2024-2050 | Same variables, projected | Not used: loaded into the model's input file, but no calculation or chart uses it |
     | GDP | IHME Financing Global Health, 1960-2050 (2026) | GDP per person, constant 2023 US$ | Constant-dollar GDP; ART staff-cost scaling; regression controls |
@@ -816,7 +835,7 @@ with tabs[4]:
       no estimate; under-5s are 76% of malaria deaths in sub-Saharan Africa and 40% elsewhere.
     - HIV prevalence among pregnant women is 15% above the all-adult rate.
     - A cut is sustained for all five years, and no other funder steps in except the government response chosen.
-    - The 2021-2023 average is the "before" level for every country.
+    - 2023 aid is the "before" level for every country.
     """)
     th.section_header("report", "Limitations")
     md("""
@@ -829,10 +848,10 @@ with tabs[4]:
       chain breakdowns are not modelled.
     - **No re-allocation by other donors** beyond the government response.
     - **Post-2023 aid is not observed by recipient.** IHME's 2024-2025 estimates have no country split, so the model's
-      baseline is 2021-2023. A 2025 baseline (IHME's preliminary 2025 aid levels) would reflect aid already lost
+      baseline is 2023. A 2025 baseline (IHME's preliminary 2025 aid levels) would reflect aid already lost
       after 2023; this is planned as a future option. The IHME 2025 scenario shows the effect of those losses.
     - **Inputs come from different years** and are applied to 2026-2030 without projection (see *Data Years*): aid is
-      the 2021-2023 average, coverage is 2024-2025, government health spending is 2023.
+      2023, coverage is 2024-2025, government health spending is 2023.
     - **Malaria coverage is modelled.** Treatment, bednet and spraying coverage are Malaria Atlas Project 2025
       estimates (MAP's 2025 values repeat 2024 for treatment and bednets). Outside MAP's bednet countries, surveys
       from 2015 on or a default are used and flagged with the source and year next to each value.

@@ -3,8 +3,10 @@ Reallocation: the team's allocation model. The same post-cut health aid pool, re
 more money at home lose more aid, while countries where aid saves lives cheaply and high-burden countries are
 protected; four scenarios run through this dashboard's engine.
 
-Data: model_data/allocation/*.csv, written by allocation_model.py from "ALLOCATION MODEL/Allocation_model_CostPerLife_
-Need.xlsx" (the method is in that folder's two PDFs). Nothing here runs the engine: rebuild with python allocation_model.py.
+Data: model_data/sources/<source>/allocation/*.csv for the aid data source picked at the top of the page, written by
+allocation_model.py --source <source> from "ALLOCATION MODEL/Allocation_model_CostPerLife_Need.xlsx" (the method is in
+that folder's two PDFs), with 2023 and projected 2026 aid from that source's projection workbook. Nothing here runs the
+engine: rebuild with python prepare_model.py --precompute-only.
 
 Page order: the headline and rule picker; how the plan works; what it achieves (the four scenarios); who gains and
 loses aid; who carries the funding gap; one country; services; other rules; caveats and sources. Detail that most
@@ -54,9 +56,13 @@ SHORT_RULE = {"cpl_need": "+ Cost per life + need (team plan)", "cpl": "+ Cost p
 N_MOVERS = 8                       # countries shown at each end of the "who gains and loses" chart
 
 
+AID_SRC = ms.hm.SOURCES[ms.source()]       # the aid data source picked at the top of the page
+
+
 @st.cache_data(show_spinner=False)
-def _load():
-    return am.load()
+def _load(src: str):
+    """The allocation results for one aid data source (model_data/sources/<source>/allocation/)."""
+    return am.load(ms.hm.source_dir(src) / "allocation")
 
 
 def dot(color: str) -> str:
@@ -105,7 +111,7 @@ def kicker(text: str, top: str = "1.6rem"):
     st.markdown(f"<div class='ed-kicker' style='margin:{top} 0 0.5rem'>{e(text)}</div>", unsafe_allow_html=True)
 
 
-R = _load()
+R = _load(ms.source())
 C = R["countries"]
 RULES = R["rules"]
 N_ALL, N_MATCHED = len(C), int(C["in_engine"].sum())
@@ -144,14 +150,16 @@ fills = {"red": 0.0, "blue": 0.0, "yellow": np.minimum(C["capacity"], proj_cut).
 nk, ek = RULES.at[rule, "need_k"], RULES.at[rule, "eff_k"]
 
 with lede_box:
-    head = (f"Dividing the same {ms.money_words(POOL * 1e6)} of health aid {RULE_PHRASE[rule]} would cut extra deaths "
-            f"by {SAVED / TOT['red']:.0%}")
+    # the plan can raise deaths (e.g. on OECD data, where the smaller pool sends 28 countries to zero aid): say so
+    head = (f"Dividing the same {ms.money_words(POOL * 1e6)} of health aid {RULE_PHRASE[rule]} would "
+            f"{'cut' if SAVED >= 0 else 'raise'} extra deaths by {abs(SAVED) / TOT['red']:.0%}")
     dek = (f"Health aid to the {N_ALL} countries in the plan is set to fall from {bn(C['aid_2023'].sum())} in 2023 to "
            f"{bn(POOL)} in 2026. Keeping that smaller total, this plan asks countries that can raise more money at home to "
            f"give up more aid" + (f", and protects {PROTECTS[rule]}." if PROTECTS[rule] else "."))
     big = [(num(TOT["red"]), "Extra Deaths, Current Split", "2026-2030, no new money"),
            (num(TOT["blue"]), "Extra Deaths, Reallocated", "same aid, no new money"),
-           (num(SAVED), "Lives Saved by Reallocation Alone", f"range {rng(*SAVED_R)}"),
+           ((num(SAVED), "Lives Saved by Reallocation Alone", f"range {rng(*SAVED_R)}") if SAVED >= 0 else
+            (num(-SAVED), "Extra Deaths From Reallocation Alone", f"range {rng(-SAVED_R[1], -SAVED_R[0])}")),
            (str(ZERO), "Countries Moved to Zero Aid", f"of {N_ALL}; their own money could replace it")]
     html_block("<div class='ed-lede'><div class='ed-kicker'>Allocation Model · Who Should Absorb the Aid Cut?</div>"
                f"<div class='ed-headline'>{e(head)}</div><p class='ed-dek'>{e(dek)}</p></div>"
@@ -159,7 +167,7 @@ with lede_box:
                + "".join(f"<div class='ed-bignum'><div class='v'>{e(v)}</div><div class='l'>{e(l)}</div>"
                          f"<div class='n'>{e(n)}</div></div>" for v, l, n in big) + "</div>")
     st.markdown(th.source_html(None, f"Extra deaths from HIV, TB, malaria and immunization in the {N_MATCHED} countries "
-                                     f"this dashboard models, relative to 2021-2023 aid. Ranges: the {th.RANGE_LABEL} "
+                                     f"this dashboard models, relative to 2023 aid. Ranges: the {th.RANGE_LABEL} "
                                      "(2.5th-97.5th percentile of 400 draws)."), unsafe_allow_html=True)
 
 # --------------------------------------------------------------------------- #
@@ -171,7 +179,7 @@ protect_t = (f"For {PROTECTS[rule]}, what they could raise counts for less, so t
              if PROTECTS[rule] else "This rule protects no one beyond ability to pay. Choose another rule above to "
                                     "add protection for need or cost per life.")
 cards = [("One Pot of Aid", bn(POOL), "a year in 2026",
-          f"That is {bn(TOTAL_CUT)} less than in 2023 (OECD projection). The plan keeps this total and only "
+          f"That is {bn(TOTAL_CUT)} less than in 2023 ({AID_SRC} projection). The plan keeps this total and only "
           "changes which countries absorb the cut."),
          ("Those Who Can Pay Give More", f"{LAM:.1%}",
           "of what each country could raise" if not (nk or ek) else "of what each could raise, after protection",
@@ -225,7 +233,7 @@ st.markdown(ms._esc(f"Extra deaths over 2026-2030 in the {N_MATCHED} countries t
 def mcell(s: str) -> str:
     name, _, col = SCEN[s]
     lo, hi = RANGE[s]
-    chg = "" if s == "red" else f"<small>−{1 - TOT[s] / TOT['red']:.0%}</small>"
+    chg = "" if s == "red" else f"<small>{TOT[s] / TOT['red'] - 1:+.0%}</small>".replace("-", "−")
     if s in ("red", "blue"):
         note = f"range {rng(lo, hi)}"
     else:
@@ -240,7 +248,7 @@ def mcell(s: str) -> str:
 
 html_block("<div class='ed-matrix'>"
            "<div class='corner'></div><div class='hd'>No new money</div><div class='hd'>With new money</div>"
-           "<div class='rh'>Current split<small>OECD-projected 2026 aid</small></div>" + mcell("red") + mcell("yellow")
+           "<div class='rh'>Current split<small>projected 2026 aid</small></div>" + mcell("red") + mcell("yellow")
            + "<div class='rh'>Reallocated<small>" + e(am.RULES[rule][0].lower().capitalize()) + "</small></div>"
            + mcell("blue") + mcell("green") + "</div>")
 
@@ -251,7 +259,7 @@ for b in am.BUCKETS:
                 hovertemplate=f"<b>{b}</b><br>%{{y:,.0f}} extra deaths<extra></extra>")
 for s in ORDER:
     lab = f"<b>{num(TOT[s])}</b>" + ("" if s == "red" else
-                                      f"  <span style='color:{th.MUTED}'>−{1 - TOT[s] / TOT['red']:.0%}</span>")
+                                      f"  <span style='color:{th.MUTED}'>{TOT[s] / TOT['red'] - 1:+.0%}</span>".replace("-", "−"))
     fig.add_annotation(x=SCEN[s][1], y=TOT[s], text=lab, showarrow=False, yshift=12, font=dict(size=13, color=th.INK))
 fig.update_layout(barmode="stack", height=440, showlegend=False,
                   title=th.title_sub("Extra Deaths by Disease, 2026-2030",
@@ -260,7 +268,11 @@ fig.update_layout(barmode="stack", height=440, showlegend=False,
 chart(fig, source=SOURCE_NOTE, note="% = change from the current split with no new money.")
 dis_down = [b for b in am.BUCKETS if DD.at[b, "blue"] < DD.at[b, "red"]]
 dis_up = [b for b in am.BUCKETS if DD.at[b, "blue"] > DD.at[b, "red"]]
-if dis_up:
+if dis_up and not dis_down:
+    st.markdown(ms._esc("**Reallocation alone raises deaths from every disease here.** The countries that give up aid "
+                        "are not able to replace it in time, so fewer people are reached. Adding countries' own money "
+                        "closes the gap."))
+elif dis_up:
     st.markdown(ms._esc(
         f"**The catch: {' and '.join(dis_up)} deaths rise.** Reallocation alone saves lives from "
         + (', '.join(lower_dis(b) for b in dis_down[:-1]) + ' and ' + lower_dis(dis_down[-1]) if len(dis_down) > 1
@@ -275,16 +287,18 @@ with st.expander("How much of the gain comes from new money, and how much from r
     st.markdown(ms._esc(
         f"Going from the current split with no new money to reallocated aid plus new money saves about "
         f"{ms.round_words(TOT['red'] - TOT['green'])} lives. The two changes interact, so each one's share depends on "
-        f"which comes first; averaging both orders gives **about {ms.round_words(nm)} to new money** and **about "
-        f"{ms.round_words(ra)} to reallocation**. That is smaller than the reallocation-alone figure above because, once new money is in, "
-        f"reallocation has less left to fix. This is an "
-        f"accounting split of these scenarios, not a causal estimate."))
+        f"which comes first; averaging both orders gives **about {ms.round_words(nm)} to new money** and "
+        + (f"**about {ms.round_words(ra)} to reallocation**." if ra >= 0 else
+           f"**reallocation adds about {ms.round_words(-ra)} deaths**, which the new money more than makes up for.")
+        + (" That is smaller than the reallocation-alone figure above because, once new money is in, reallocation "
+           "has less left to fix." if ra >= 0 else "")
+        + " This is an accounting split of these scenarios, not a causal estimate."))
 
 # --------------------------------------------------------------------------- #
 # 3. Who gains and who loses aid
 # --------------------------------------------------------------------------- #
 th.section_header("swap_vert", "Who Gains and Who Loses Aid",
-                  help="Each country's 2026 aid under this plan compared with the OECD projection, US$ a year.")
+                  help="Each country's 2026 aid under this plan compared with the projection, US$ a year.")
 dv = (C[aid_col] - C["aid_2026_proj"])
 n_gain, n_lose = int(RULES.at[rule, "gain_vs_proj"]), int(RULES.at[rule, "lose_vs_proj"])
 movers = pd.concat([dv.nlargest(N_MOVERS), dv.nsmallest(N_MOVERS).iloc[::-1]])
@@ -297,7 +311,7 @@ fig = go.Figure(go.Bar(
     text=[("+" if v >= 0 else "−") + f"${abs(v):,.0f}M" for v in movers], textposition=["inside" if abs(v) >= 0.6 * movers.abs().max() else "outside" for v in movers],
     cliponaxis=False,
     insidetextanchor="end", insidetextfont=dict(size=12, color=th.SURFACE), outsidetextfont=dict(size=12, color=th.INK),
-    hovertemplate=("<b>%{y}</b><br>%{x:+$,.1f}M a year vs the OECD projection<br>2023 aid %{customdata[0]} · OECD 2026 "
+    hovertemplate=("<b>%{y}</b><br>%{x:+$,.1f}M a year vs the projection<br>2023 aid %{customdata[0]} · projected 2026 "
                    "%{customdata[1]} · this plan %{customdata[2]}<br>Could raise %{customdata[3]} a year for health"
                    "<extra></extra>")))
 lo_x, hi_x = float(min(movers.min(), 0)), float(max(movers.max(), 0))
@@ -305,15 +319,15 @@ pad = (hi_x - lo_x) * 0.2                          # room for the value labels o
 fig.update_layout(height=40 + 26 * len(movers) + 80, showlegend=False, margin=dict(t=80, l=10, r=40),
                   uniformtext=dict(minsize=12, mode="show"),
                   title=th.title_sub(f"The {N_MOVERS} Biggest Gains and Losses",
-                                     "This plan minus the OECD projection, US$ a year"),
+                                     "This plan minus the projection, US$ a year"),
                   xaxis=dict(range=[lo_x - pad, hi_x + pad], **money_ticks(lo_x - pad, hi_x + pad)),
                   yaxis=dict(autorange="reversed", ticklabelstandoff=8))
 chart(fig, source=SOURCE_NOTE, note="Hover for each country's aid and what it could raise at home.")
 loser = C.loc[dv.idxmin()]
 st.markdown(ms._esc(
-    f"Compared with the OECD projection, **{n_gain} countries get more aid and {n_lose} get less**; {ZERO} get none. "
+    f"Compared with the {AID_SRC} projection, **{n_gain} countries get more aid and {n_lose} get less**; {ZERO} get none. "
     f"The biggest loser is {loser['country']}: its aid falls from {bn(loser['aid_2023'])} in 2023 to "
-    f"{bn(loser[aid_col])} (the OECD projected {bn(loser['aid_2026_proj'])}), but it could raise "
+    f"{bn(loser[aid_col])} (the {AID_SRC} projection: {bn(loser['aid_2026_proj'])}), but it could raise "
     f"{bn(loser['capacity'])} a year for health at home."))
 
 with st.expander(f"Every country's aid, split four ways (all {N_ALL})"):
@@ -334,7 +348,7 @@ with st.expander(f"Every country's aid, split four ways (all {N_ALL})"):
         fig.add_bar(name=lbl, x=A["country"], y=A[k] / A["aid_2023"] * 100, marker_color=col, marker_line_width=0,
                     customdata=np.column_stack([cd, (A[k]).map(m_usd)]),
                     hovertemplate=("<b>%{customdata[0]}</b><br>" + lbl + ": %{y:.1f}% (%{customdata[4]})<br>"
-                                   "2023 aid %{customdata[1]} · OECD 2026 %{customdata[2]} · this plan %{customdata[3]}"
+                                   "2023 aid %{customdata[1]} · projected 2026 %{customdata[2]} · this plan %{customdata[3]}"
                                    "<extra></extra>"))
     fig.update_layout(barmode="stack", bargap=0.12, height=480, margin=dict(t=110),
                       title=th.title_sub("Each Country's 2023 Aid",
@@ -380,7 +394,7 @@ st.markdown(ms._esc(f"With no new money the total gap stays at {bn(TOTAL_CUT)} a
 # 5. One country
 # --------------------------------------------------------------------------- #
 th.section_header("public", "Look Up a Country",
-                  help="Aid figures are all health aid (OECD), US$ a year. Deaths cover HIV, TB, malaria and "
+                  help=f"Aid figures are all health aid ({AID_SRC}), US$ a year. Deaths cover HIV, TB, malaria and "
                        "immunization in the countries this dashboard models.")
 CR = am.country_results(R, rule)
 names_sorted = C["country"].sort_values()
@@ -398,7 +412,7 @@ capped = cut >= r["aid_2023"] - 1e-6
 ncut, cutp = r["aid_2023"] - r["aid_2026_proj"], cut / r["aid_2023"] if r["aid_2023"] else 0.0
 nd, ed = r[f"need_disc_{rule}"], r[f"eff_disc_{rule}"]
 pill_row([("2023 Aid", m_usd(r["aid_2023"]), "a year, all health aid"),
-          ("OECD 2026 Projection", m_usd(r["aid_2026_proj"]), f"cut {pct(ncut / r['aid_2023'], 1)}"),
+          (f"{AID_SRC} 2026 Projection", m_usd(r["aid_2026_proj"]), f"cut {pct(ncut / r['aid_2023'], 1)}"),
           ("This Plan, 2026", m_usd(r[aid_col]), f"cut {pct(cutp, 1)}"),
           ("Change vs Projection", signed_m(r[aid_col] - r["aid_2026_proj"]), "a year")], 4)
 cap_tip = (f"New tax revenue {m_usd(r['new_tax'])} × health share {r['health_share']:.1%} = "
@@ -434,7 +448,7 @@ if iso in CR.index:
     rise = cr["deaths_blue"] - cr["deaths_red"]
     st.markdown(ms._esc(
         (f"**Deaths rise here under this plan**, by {rise:,.0f}, because {r['country']} gives up more aid than in the "
-         f"OECD projection. " if rise >= 0.5 and r[aid_col] < r["aid_2026_proj"] else "")
+         f"{AID_SRC} projection. " if rise >= 0.5 and r[aid_col] < r["aid_2026_proj"] else "")
         + f"Extra deaths 2026-2030 in {r['country']}: **{cr['deaths_red']:,.0f}** with the current split and "
         f"**{cr['deaths_blue']:,.0f}** with reallocated aid, both with no new money; "
         + ("none" if max(cr["deaths_yellow"], cr["deaths_green"]) < 0.5 else
@@ -446,13 +460,13 @@ else:
 with st.expander(f"All {N_ALL} countries in one table"):
     T = pd.DataFrame({
         "Country": C["country"].replace({"Democratic Republic of the Congo": "DR Congo"}), "Income Group": C["income"],
-        "2023 Aid ($M)": C["aid_2023"], "OECD 2026 ($M)": C["aid_2026_proj"], "This Plan 2026 ($M)": C[aid_col],
-        "Change vs OECD ($M)": C[aid_col] - C["aid_2026_proj"], "Could Raise ($M/yr)": C["capacity"],
+        "2023 Aid ($M)": C["aid_2023"], "Projected 2026 ($M)": C["aid_2026_proj"], "This Plan 2026 ($M)": C[aid_col],
+        "Change vs Projection ($M)": C[aid_col] - C["aid_2026_proj"], "Could Raise ($M/yr)": C["capacity"],
         "Need": C["need"], "Cost per Life Saved ($)": C["cost_per_life"], "Effective Capacity ($M)": C[eff_col],
         "Deaths, Current Split": CR["deaths_red"].reindex(C.index),
         "Deaths, Reallocated": CR["deaths_blue"].reindex(C.index)})
     T["Lives Saved"] = T["Deaths, Current Split"] - T["Deaths, Reallocated"]
-    T = T.sort_values("Change vs OECD ($M)", ascending=False).round(
+    T = T.sort_values("Change vs Projection ($M)", ascending=False).round(
         {c: 1 for c in T.columns if "($M" in c} | {"Need": 2, "Cost per Life Saved ($)": 0, "Deaths, Current Split": 0,
                                                      "Deaths, Reallocated": 0, "Lives Saved": 0})
     for c in ["Deaths, Current Split", "Deaths, Reallocated", "Lives Saved", "Cost per Life Saved ($)"]:
@@ -460,15 +474,15 @@ with st.expander(f"All {N_ALL} countries in one table"):
     fm = st.column_config.NumberColumn
     st.dataframe(T, hide_index=True, height=420, **ms.WIDE, column_config={
         "Country": st.column_config.TextColumn(pinned=True, width="medium"),
-        "2023 Aid ($M)": fm(format="localized"), "OECD 2026 ($M)": fm(format="localized"),
-        "This Plan 2026 ($M)": fm(format="localized"), "Change vs OECD ($M)": fm(format="%+.1f"),
+        "2023 Aid ($M)": fm(format="localized"), "Projected 2026 ($M)": fm(format="localized"),
+        "This Plan 2026 ($M)": fm(format="localized"), "Change vs Projection ($M)": fm(format="%+.1f"),
         "Could Raise ($M/yr)": fm(format="localized"), "Need": fm(format="%.2f"),
         "Cost per Life Saved ($)": fm(format="localized", help="Blank: not modelled by this dashboard (uses its "
                                                                 "income-group average efficiency)"),
         "Effective Capacity ($M)": fm(format="localized"), "Deaths, Current Split": fm(format="localized"),
         "Deaths, Reallocated": fm(format="localized"), "Lives Saved": fm(format="localized")})
     st.markdown(th.source_html(SOURCE_NOTE, "Deaths: no new money, 2026-2030; blank where the dashboard does not "
-                                            "model the country. Sorted by change versus the OECD projection."),
+                                            "model the country. Sorted by change versus the projection."),
                 unsafe_allow_html=True)
     st.download_button("Download This Table (CSV)", T.to_csv(index=False).encode(),
                        file_name=f"allocation_{rule}.csv", mime="text/csv", key="dl_alloc_table")

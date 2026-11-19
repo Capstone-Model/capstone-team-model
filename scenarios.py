@@ -42,15 +42,15 @@ PRESETS = {
         "baseline). The sliders' tooltips give the sources for each value."),
     "Combined retreat": "'US Bilateral Exit + Multilateral Withdrawals' for the US plus the OECD-reported 2025 total-aid cuts for all other donors.",
     "Announced donor cuts": (
-        "Cuts against each country's 2019-2023 average aid. Published numbers first: the Global Fund's reduced GC7 "
-        "(2026) and GC8 (2027) allocations for this country, Gavi 6.0 new pledges vs Gavi 5.0 for every donor, the "
-        "US exit from Gavi and WHO, America First MOU schedules for US bilateral and NGO aid, and Swedish, UK and "
-        "Dutch programme announcements. Predicted: the Global Fund's GC7-to-GC8 decline continues each year after "
-        "2027; US bilateral aid ends in countries with no MOU (the predicted MOU cut), and their US money through NGOs "
-        "follows the 3 MOU countries with the most similar aid / government health spending ratio; each donor's health budget falls with its total aid (OECD ODA, IHME 2025 health vs total "
-        "aid), and whatever its Global Fund, Gavi and announced cuts leave of that budget is shared equally over its "
-        "other channels, so nothing is cut twice. Foundations and non-DAC donors follow IHME's 2025 estimates. "
-        "Built by announcement_model/project_cuts.py."),
+        "The team's announcement-based projection (one workbook per aid data source, same rules in both): every "
+        "recipient x donor x channel flow of 2023 health aid, projected 2026-2030. Published numbers first: America "
+        "First MOU schedules for US bilateral and NGO aid, the Global Fund's reduced GC7 (2026) and GC8 (2027-28) "
+        "allocations for this country, each donor's Gavi 6.0 pledge, the US exit from Gavi and WHO, UK and Australian "
+        "country allocations, Swedish and UK country exits, the German bilateral health exit and the Dutch health "
+        "budget. Predicted: US bilateral aid in a country with no MOU keeps 25%; every other flow of a donor follows "
+        "its OECD total-aid outlook, after its announced cuts are counted; the Gates Foundation grows 2.9% a year. "
+        "Lending funded by debt repayments, China and other non-DAC donors are outside the projection. Built by "
+        "announcement_model/workbook_inputs.py."),
     "Custom": "Set cuts yourself by donor and by channel (cuts combine multiplicatively: 1 - (1-donor cut)(1-channel cut)).",
 }
 PRECOMPUTED_PRESETS = [p for p in PRESETS if p != "Custom"]
@@ -191,7 +191,7 @@ def build_scenario(preset: str, opts: dict, ci: pd.DataFrame) -> hm.Scenario:
             sc.src_direct[s] = v
             sc.src_multi[s] = v
     if preset == ANNOUNCED:
-        sc.announcement = True                     # yearly cuts per cell from model_data/announcement_cuts.csv
+        sc.announcement = True                     # each cell's own yearly cut from the selected source's workbook
     if preset == SHORTFALLS:
         # a channel cut for all source donors; this preset has no US multilateral exit, so nothing is counted twice
         g, f = shortfall_cuts(opts)

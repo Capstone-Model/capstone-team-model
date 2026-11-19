@@ -39,6 +39,13 @@ import pandas as pd
 HERE = Path(__file__).resolve().parent
 WORKBOOK = HERE / "ALLOCATION MODEL" / "Allocation_model_CostPerLife_Need.xlsx"
 OUT = HERE / "model_data" / "allocation"
+# the team's projection workbook for each aid data source (the dashboard's IHME / OECD toggle); "workbook" = this
+# allocation workbook's own Data_Aid sheet (legacy, used by the tests)
+AID_WORKBOOKS = {"ihme": HERE / "IHME_aid_cut_projections_announcements.xlsx",
+                 "oecd": HERE / "OECD_aid_cut_projections.xlsx"}
+OECD_AID = AID_WORKBOOKS["oecd"]
+AID_SOURCE = "workbook"                                  # "ihme", "oecd" or "workbook"
+OECD_ISO = {"XKV": "KSV"}                                # the projection's code -> this workbook's code
 
 N_DRAWS, SEED = 400, 7
 BUCKETS = ["HIV", "TB", "Malaria", "Immunization"]
@@ -119,11 +126,32 @@ def best_four_year_gain(hh: pd.DataFrame) -> pd.Series:
     return best.where(gains.notna().any(axis=1))
 
 
-def capacity(W: dict) -> pd.DataFrame:
+def oecd_aid(path: Path = OECD_AID) -> pd.DataFrame:
+    """2023 health aid and projected 2026 health aid by recipient (US$ m), from the By_Recipient sheet of one of the
+    team's projection workbooks (thousands of constant 2023 US$)."""
+    br = pd.read_excel(path, "By_Recipient")
+    br = br[br["ISO3"].notna()].copy()
+    br["ISO3"] = br["ISO3"].replace(OECD_ISO)
+    return pd.DataFrame({"aid_2023": br["Baseline DAH (k$)"].to_numpy(float) / 1e3,
+                         "aid_2026_proj": br["Proj 2026"].to_numpy(float) / 1e3}, index=br["ISO3"])
+
+
+def capacity(W: dict, aid_source: str | None = None) -> pd.DataFrame:
     lev, aid, tax, ks = W["lev"], W["aid"], W["tax"], W["ks"]
     df = aid[["country", "income"]].copy()
-    df["aid_2023"] = aid["dah_2023"].map(_num) / 1e6
-    df["aid_2026_proj"] = aid["dah_2026"].map(_num) / 1e6
+    src = aid_source or AID_SOURCE
+    if src == "oecd_crs":
+        src = "oecd"
+    if src in AID_WORKBOOKS:
+        o = oecd_aid(AID_WORKBOOKS[src]).reindex(df.index)
+        missing = o.index[o["aid_2023"].isna()].tolist()
+        if missing:                                  # not a recipient in that workbook: no aid recorded in 2023
+            print(f"{src}: no 2023 aid in the projection for {missing}; counted as 0")
+        o = o.fillna(0.0)
+        df["aid_2023"], df["aid_2026_proj"] = o["aid_2023"], o["aid_2026_proj"]
+    else:
+        df["aid_2023"] = aid["dah_2023"].map(_num) / 1e6
+        df["aid_2026_proj"] = aid["dah_2026"].map(_num) / 1e6
     t = tax.reindex(df.index)
     in_proj = t["in_proj"] == 1
     # E: tax workbook, average of the 2027-30 additions (US$ bn -> m)
@@ -239,8 +267,8 @@ def allocate(base: pd.DataFrame, need_k: float, eff_k: float) -> tuple:
                          "aid_2026": base["aid_2023"] - cut}), lam
 
 
-def build_base(W: dict, cpl: pd.DataFrame) -> pd.DataFrame:
-    cap = capacity(W)
+def build_base(W: dict, cpl: pd.DataFrame, aid_source: str | None = None) -> pd.DataFrame:
+    cap = capacity(W, aid_source)
     return pd.concat([cap, need(W, cap.index), efficiency(cap, cpl)], axis=1)
 
 
@@ -255,8 +283,10 @@ def need_tiers(n: pd.Series) -> pd.Series:
 # --------------------------------------------------------------------------- #
 def run_scenario(iso, cut_rate, theta, inputs, ptab):
     import health_model as hm
-    sc = hm.Scenario(name="allocation", src_direct={s: cut_rate for s in hm.SOURCE_GROUPS},
-                     src_multi={s: cut_rate for s in hm.SOURCE_GROUPS})
+    # every donor group in the inputs, so groups only one data source has (OECD: multilateral own funds) are cut too
+    groups = set(hm.SOURCE_GROUPS) | set(inputs["lines"]["src_grp"])
+    sc = hm.Scenario(name="allocation", src_direct={s: cut_rate for s in groups},
+                     src_multi={s: cut_rate for s in groups})
     fis = hm.Fiscal(mode="custom", theta=theta, cap_to_space=False, allocation="pro_rata", effort="p75")
     return hm.run_country(iso, sc, fis, inputs, ptab, n_draws=N_DRAWS, seed=SEED, keep_draws=True)
 
@@ -373,9 +403,14 @@ def country_results(R: dict, rule: str = PLAN) -> pd.DataFrame:
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--check", action="store_true", help="compare the workbook's cost per life with the engine's")
+    p.add_argument("--source", choices=["ihme", "oecd", "workbook"], default="workbook",
+                   help="aid data: a projection workbook (results in model_data/sources/<source>/allocation/) or this "
+                        "allocation workbook's own Data_Aid sheet (model_data/allocation/, the default)")
     args = p.parse_args(argv)
     import health_model as hm
-    inputs, ptab = hm.load_inputs(), hm.load_params()
+    src = None if args.source == "workbook" else args.source
+    out = hm.source_dir(src) / "allocation" if src else OUT
+    inputs, ptab = hm.load_inputs(source=src), hm.load_params()
     W = read_workbook()
     engine = sorted(set(inputs["lines"].iso3))
     cpl_all = cost_per_life(engine, inputs, ptab)          # all dashboard countries (the per-disease medians)
@@ -387,7 +422,7 @@ def main(argv=None):
             moved = rel[rel > 1e-6]
             print(f"{k:13s} lives per US$1M: {len(moved)} of {rel.notna().sum()} countries differ from the workbook"
                   + (f" (largest {moved.max():.1%}: {', '.join(moved.sort_values().index[-5:])})" if len(moved) else ""))
-    base = build_base(W, cpl)
+    base = build_base(W, cpl, args.source)
     base["need_tier"] = need_tiers(base["need"])
     lev = W["lev"]
     allocs, summary = {}, []
@@ -402,7 +437,7 @@ def main(argv=None):
                         "lose_vs_proj": int((a["aid_2026"] - base["aid_2026_proj"] <= -0.05).sum())})
     R = run_all(base, allocs, inputs, ptab)
 
-    OUT.mkdir(parents=True, exist_ok=True)
+    out.mkdir(parents=True, exist_ok=True)
     cols = ["country", "income", "aid_2023", "aid_2026_proj", "tax_source", "new_tax", "health_share",
             "tax_for_health", "gov_spend", "ks_score", "ks_cluster", "room", "shift_cap", "shift_cap_source",
             "budget_shift", "capacity", "need", "need_source", "need_high", "need_tier", "lives_per_musd",
@@ -412,18 +447,18 @@ def main(argv=None):
     C = C.join(cpl[[c for c in cpl.columns if c.startswith(("s_", "l_"))]])
     for key, a in allocs.items():
         C = C.join(a.add_suffix(f"_{key}"))
-    C.rename_axis("iso3").to_csv(OUT / "countries.csv")
-    pd.DataFrame(summary).to_csv(OUT / "rules.csv", index=False)
-    cpl_all.rename_axis("iso3").to_csv(OUT / "cost_per_life.csv")
-    R["by_disease"].to_csv(OUT / "results_disease.csv", index=False)
-    R["by_line"].to_csv(OUT / "results_services.csv", index=False)
-    R["draws"].to_csv(OUT / "results_draws.csv", index=False)
+    C.rename_axis("iso3").to_csv(out / "countries.csv")
+    pd.DataFrame(summary).to_csv(out / "rules.csv", index=False)
+    cpl_all.rename_axis("iso3").to_csv(out / "cost_per_life.csv")
+    R["by_disease"].to_csv(out / "results_disease.csv", index=False)
+    R["by_line"].to_csv(out / "results_services.csv", index=False)
+    R["draws"].to_csv(out / "results_draws.csv", index=False)
     s = pd.DataFrame(summary).set_index("rule")
     D = R["by_disease"]
     tot = D.groupby(["rule", "scenario"])["deaths_5y"].sum()
     print(f"{len(R['matched'])} matched countries; lambda {s.at[PLAN, 'lambda']:.1%}, {s.at[PLAN, 'zero_aid']} at zero aid")
     print(tot.round(0).to_string())
-    print(f"wrote {OUT}")
+    print(f"wrote {out}")
 
 
 if __name__ == "__main__":

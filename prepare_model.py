@@ -30,6 +30,7 @@ Everything is in constant 2023 US$ unless noted. IHME DAH values are in thousand
 import argparse
 import json
 import re
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -571,27 +572,39 @@ def main(a):
 # --------------------------------------------------------------------------- #
 # All-country results for each preset (loaded instantly by the app when its settings are the defaults)
 # --------------------------------------------------------------------------- #
-def precompute_all():
+def precompute_all(sources=(None, "ihme", "oecd")):
     """Run every preset (except Custom) for all dashboard countries with the default settings (no government
-    replacement, death-rate trend on, 400 draws) and save model_data/all_countries_<preset>.csv, which the All
-    Countries page loads."""
+    replacement, death-rate trend on, 400 draws) and save all_countries_<preset>.csv, which the All Countries page
+    loads, plus the Reallocation page's results. Once per aid data source: None = the legacy 2021-23 inputs in
+    model_data/ (the tests), "ihme" / "oecd" = the projection workbooks in model_data/sources/<source>/ (the dashboard;
+    their inputs are rebuilt first by announcement_model/workbook_inputs.py)."""
     import health_model as hm
     import scenarios as scn
-
-    print("precomputing all-country results (with the mortality trend switched on) ...")
-    inputs, ptab = hm.load_inputs(OUT), hm.load_params()
-    for preset in scn.PRECOMPUTED_PRESETS:
-        sc = scn.build_scenario(preset, scn.default_opts(preset, inputs["ci"]), inputs["ci"])
-        res = hm.run_all(sc, hm.Fiscal(*scn.DEFAULT_FISCAL), inputs, ptab, n_draws=scn.ALL_COUNTRY_DRAWS,
-                         mortality_trend=scn.DEFAULT_MORTALITY_TREND)
-        path = scn.precomputed_path(OUT, preset)
-        res.to_csv(path, index=False)
-        pd.DataFrame(res.attrs["draw_totals"]).rename_axis("draw").to_csv(scn.precomputed_draws_path(OUT, preset))
-        print(f"  {path.name}: {len(res)} countries, {res['deaths_5y'].sum():,.0f} extra deaths over 5 years")
-    # the Reallocation page's results run on the same engine, so they are refreshed with it
     import allocation_model
-    print("refreshing the allocation model results (model_data/allocation/) ...")
-    allocation_model.main([])
+
+    if any(sources):
+        sys.path.insert(0, str(HERE / "announcement_model"))
+        import workbook_inputs
+        raw = workbook_inputs.raw_ihme_2023()
+        for s in sources:
+            if s:
+                print("building", workbook_inputs.build(s, raw))
+    ptab = hm.load_params()
+    for src in sources:
+        out = hm.source_dir(src, OUT)
+        print(f"precomputing all-country results for {src or 'legacy'} (with the mortality trend switched on) ...")
+        inputs = hm.load_inputs(OUT, source=src)
+        for preset in scn.PRECOMPUTED_PRESETS:
+            sc = scn.build_scenario(preset, scn.default_opts(preset, inputs["ci"]), inputs["ci"])
+            res = hm.run_all(sc, hm.Fiscal(*scn.DEFAULT_FISCAL), inputs, ptab, n_draws=scn.ALL_COUNTRY_DRAWS,
+                             mortality_trend=scn.DEFAULT_MORTALITY_TREND)
+            path = scn.precomputed_path(out, preset)
+            res.to_csv(path, index=False)
+            pd.DataFrame(res.attrs["draw_totals"]).rename_axis("draw").to_csv(scn.precomputed_draws_path(out, preset))
+            print(f"  {path.name}: {len(res)} countries, {res['deaths_5y'].sum():,.0f} extra deaths over 5 years")
+        # the Reallocation page's results run on the same engine, so they are refreshed with it
+        print(f"refreshing the allocation model results ({out.name}/allocation) ...")
+        allocation_model.main(["--source", src or "workbook"])
 
 
 if __name__ == "__main__":

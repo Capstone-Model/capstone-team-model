@@ -74,7 +74,7 @@ def test_interest_text_shows_source_and_year():
 
 
 def test_inputs_years_line():
-    assert ms.inputs_years_line(CI, ISOS) == ("Inputs: aid 2021-23 average; coverage 2024-25 (malaria: MAP 2025); "
+    assert ms.inputs_years_line(CI, ISOS) == ("Inputs: aid 2023; coverage 2024-25 (malaria: MAP 2025); "
                                                "government health spending 2023; applied to 2026-2030 without "
                                                "projection.")
     assert hm.AID_BASE_YEARS == pm.BASE_YEARS

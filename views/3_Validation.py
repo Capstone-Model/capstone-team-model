@@ -55,10 +55,10 @@ th.section_header("fact_check", "How Our Totals Compare with Published Estimates
 
 rows, all_country = [], {}
 for p in scn.PRECOMPUTED_PRESETS:
-    path = scn.precomputed_path(hm.MODEL_DIR, p)
+    path = scn.precomputed_path(ms.source_dir(), p)
     if not path.exists():
         continue
-    A = scn.load_precomputed(hm.MODEL_DIR, p)
+    A = scn.load_precomputed(ms.source_dir(), p)
     all_country[p] = A
     rows.append({"Scenario": title_case(scn.display_name(p)) + (f" ({len(A)} MOU Countries With Funding Data)" if p == ms.MOU else ""),
                  **{b: num(A[f"deaths_5y_{b}"].sum()) for b in hm.BUCKETS},
@@ -118,13 +118,13 @@ if us is not None:
 # Model check: donor money above the modelled service cost
 # --------------------------------------------------------------------------- #
 @st.cache_data(show_spinner=False)
-def _excess(ptab_json: str) -> pd.DataFrame:
+def _excess(ptab_json: str, src: str) -> pd.DataFrame:
     import io
-    return hm.donor_cost_excess(I, pd.read_json(io.StringIO(ptab_json), orient="split"))
+    return hm.donor_cost_excess(ms._inputs_for(src), pd.read_json(io.StringIO(ptab_json), orient="split"))
 
 
 th.section_header("rule", "Lines Where Donor Money Exceeds the Modelled Service Cost")
-ex = _excess(ptab_json)
+ex = _excess(ptab_json, ms.source())
 _ln = I["lines"]
 n_lines = len(_ln[_ln["line"].isin(hm.ALL_DIRECT)][["iso3", "line"]].drop_duplicates())   # country-lines with aid
 st.markdown(th.pills_html([
@@ -146,13 +146,13 @@ st.caption("In these lines, baseline donor aid ÷ cost per person is more than t
 # People on ART that donor money pays for: model vs PEPFAR's reported figure (audit I-09)
 # --------------------------------------------------------------------------- #
 @st.cache_data(show_spinner=False)
-def _on_art(ptab_json: str) -> pd.DataFrame:
+def _on_art(ptab_json: str, src: str) -> pd.DataFrame:
     import io
-    return hm.donor_funded_on_art(I, pd.read_json(io.StringIO(ptab_json), orient="split"))
+    return hm.donor_funded_on_art(ms._inputs_for(src), pd.read_json(io.StringIO(ptab_json), orient="split"))
 
 
 th.section_header("medication", "People on ART Paid for by Donors: Model vs PEPFAR")
-_art = _on_art(ptab_json)
+_art = _on_art(ptab_json, ms.source())
 st.markdown(th.pills_html([
     ("Model: Donor-Funded People on ART", ms.num(_art["donor_funded_on_art"].sum()), "",
      f"all donors, {len(_art)} dashboard countries"),
@@ -214,7 +214,7 @@ th.section_header("compare_arrows", f"Three Ways to Estimate the Same Cut: {coun
 st.caption(f"{ms.scenario_title(preset, opts)} · {ms._resp_label(fiscal_t)}" + ("" if trend else " · Death Rates Held Constant"))
 
 if iso3 not in I["ci"].index or iso3 not in set(I["lines"].iso3):
-    st.info(f"{country_name} has no recorded HIV, TB, malaria or vaccine aid in 2021-2023, so there is nothing to model.")
+    st.info(f"{country_name} has no recorded HIV, TB, malaria or vaccine aid in 2023 in the {hm.SOURCES[ms.source()]} data, so there is nothing to model.")
     st.stop()
 
 sk = scn.scenario_key(scn.build_scenario(preset, opts, I["ci"]))

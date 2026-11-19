@@ -127,14 +127,33 @@ _EXCESS_LOGGED: set = set()     # (iso3, line) pairs already logged as "donor mo
 # --------------------------------------------------------------------------- #
 # Inputs
 # --------------------------------------------------------------------------- #
-def load_inputs(model_dir: Path = MODEL_DIR) -> dict:
+# --------------------------------------------------------------------------- #
+# Aid data sources: the team's two announcement-based projection workbooks (announcement_model/workbook_inputs.py)
+# --------------------------------------------------------------------------- #
+SOURCES = {"ihme": "IHME", "oecd": "OECD"}
+SOURCE_NAMES = {"ihme": "IHME Development Assistance for Health, 2023",
+                "oecd": "OECD CRS health aid (gross ODA disbursements), 2023"}
+DEFAULT_SOURCE = "ihme"
+SOURCE_BASE_YEAR = 2023                # both workbooks project from 2023 alone
+
+
+def source_dir(source: str | None, model_dir: Path = MODEL_DIR) -> Path:
+    """model_data/sources/<source>/ (the source's aid inputs, precomputed All Countries files and allocation results);
+    model_data/ itself for None (the legacy 2021-23 IHME inputs the tests are pinned to)."""
+    return model_dir / "sources" / source if source else model_dir
+
+
+def load_inputs(model_dir: Path = MODEL_DIR, source: str | None = None) -> dict:
     """Read the model inputs from model_data/: dah_lines.csv (baseline aid, US$ a year, by country x donor group x
     channel x service line), country_inputs.csv (one row per country: people in need, coverage, deaths, fiscal data),
     ihme_trend.csv (IHME's 2025 / 2021-23 aid ratios), regressions.json and, when present, announcement_cuts.csv
     (yearly cuts by country x donor group x channel group from announcement_model/project_cuts.py). Returns a dict
     with those tables, the global mix of each disease's service lines (fallback for spreading unspecified money) and
-    the IHME trend and announcement cuts as lookups. Feeds every model run."""
-    lines = pd.read_csv(model_dir / "dah_lines.csv")
+    the IHME trend and announcement cuts as lookups. Feeds every model run. With a source ("ihme" / "oecd"), the aid
+    cells and announcement cuts come from model_data/sources/<source>/ instead: 2023 money from that workbook, each
+    cell carrying its own yearly cuts (cut_<year>), which the announcement preset uses directly."""
+    sdir = source_dir(source, model_dir)
+    lines = pd.read_csv(sdir / "dah_lines.csv")
     ci = pd.read_csv(model_dir / "country_inputs.csv").set_index("iso3")
     trend = pd.read_csv(model_dir / "ihme_trend.csv")
     reg = json.loads((model_dir / "regressions.json").read_text())
@@ -153,8 +172,8 @@ def load_inputs(model_dir: Path = MODEL_DIR) -> dict:
         ush[b] = {c: v / tot for c, v in med.items()}
     return {"lines": lines, "ci": ci, "trend": trend, "reg": reg, "global_mix": gmix, "unspec_shares": ush,
             "trend_map": trend.set_index(["src_grp", "chan_grp", "bucket"])["ratio"].to_dict(),
-            "announce_map": load_announcement_cuts(model_dir),
-            "announce_known": load_announcement_cuts(model_dir, "known_cut")}
+            "announce_map": load_announcement_cuts(sdir), "announce_known": load_announcement_cuts(sdir, "known_cut"),
+            "source": source}
 
 
 ANNOUNCE_FILE = "announcement_cuts.csv"
@@ -193,13 +212,13 @@ def _announcement_cuts_default(part: str = "cut") -> dict:
     return load_announcement_cuts(part=part)
 
 
-@functools.lru_cache(maxsize=2)
-def announcement_totals(model_dir: Path = MODEL_DIR) -> dict:
+@functools.lru_cache(maxsize=4)
+def announcement_totals(model_dir: Path = MODEL_DIR, source: str | None = None) -> dict:
     """All health aid (every health area, every donor) under the Announced donor cuts model, per country:
     {iso3: {"base": US$ a year in 2019-2023, "lost": US$ lost in each year 2026-2030, "known": the part of it from
     published numbers, "mou_pred": the predicted part from US money in a country without an MOU}}. Empty dict if the file is missing or predates the 2019-2023 base. Feeds the money headline
-    and the known vs predicted chart on the Dashboard."""
-    p = model_dir / ANNOUNCE_FILE
+    and the known vs predicted chart on the Dashboard. With a source, that workbook's projection (base = 2023)."""
+    p = source_dir(source, model_dir) / ANNOUNCE_FILE
     if not p.exists():
         return {}
     a = pd.read_csv(p)
@@ -216,11 +235,11 @@ def announcement_totals(model_dir: Path = MODEL_DIR) -> dict:
                   "mou_pred": r[[f"p{y}" for y in yrs]].to_numpy(float)} for iso, r in t.iterrows()}
 
 
-def announcement_sources(iso3: str, model_dir: Path = MODEL_DIR) -> pd.DataFrame:
+def announcement_sources(iso3: str, model_dir: Path = MODEL_DIR, source: str | None = None) -> pd.DataFrame:
     """All health aid lost in one country under the Announced donor cuts model, by donor group x channel group:
     columns base (US$ a year, 2019-2023), lost_<year> and known_<year> (US$). Empty if the file is missing.
     Feeds the "biggest risk" lines on the Dashboard."""
-    p = model_dir / ANNOUNCE_FILE
+    p = source_dir(source, model_dir) / ANNOUNCE_FILE
     if not p.exists():
         return pd.DataFrame()
     a = pd.read_csv(p)
@@ -247,9 +266,12 @@ def known_loss_by_year(iso3: str, inputs: dict) -> np.ndarray:
     """US$ of the Announced donor cuts preset's loss in each year 2026-2030 that comes from a published number
     (Global Fund allocations, MOUs, Gavi pledges, exits, programme announcements), for the four diseases. The rest of
     the loss is predicted. Feeds the known vs predicted chart on the Dashboard."""
+    cells = inputs["lines"][inputs["lines"].iso3 == iso3]
+    kc = [f"known_cut_{2026 + t}" for t in range(N_YEARS)]
+    if set(kc) <= set(cells.columns):                   # workbook source: each cell carries its own known cut
+        return np.clip((cells[kc].to_numpy(float) * cells["usd"].to_numpy()[:, None]).sum(axis=0), 0.0, None)
     km = inputs.get("announce_known")
     km = km if km is not None else _announcement_cuts_default("known_cut")
-    cells = inputs["lines"][inputs["lines"].iso3 == iso3]
     out = np.zeros(N_YEARS)
     for u, s, c in zip(cells["usd"], cells["src_grp"], cells["chan_grp"]):
         v = announcement_lookup(km, iso3, s, c)
@@ -356,6 +378,13 @@ class Scenario:
         channels in a country with a yearly schedule (us_direct_path_by_country), which follow that schedule. The
         announcement preset takes each cell's yearly cut from announce_map (country x donor group x channel group,
         falling back to the country x donor group average, else no cut)."""
+        cc = [f"cut_{2026 + t}" for t in range(N_YEARS)]
+        if self.announcement and set(cc) <= set(cells.columns):
+            # workbook source: each cell's own yearly cut (the workbook's projection for exactly that money)
+            out = cells[cc].to_numpy(dtype=float).copy()
+            if self.bucket_only:
+                out[(cells["bucket"] != self.bucket_only).to_numpy()] = 0.0
+            return np.clip(out, -1.0, 1.0) * self.scale
         if self.announcement:
             out = np.zeros((len(cells), N_YEARS))
             # a long-running app can hold load_inputs() output cached from before this file existed: read it here then
