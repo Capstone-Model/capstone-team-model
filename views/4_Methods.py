@@ -425,7 +425,8 @@ with tabs[2]:
     donor-funded pool, which is the people currently covered times the external (donor) share of the country's
     spending on that disease (`donor_share_*` in `country_inputs.csv`: WHO Global Health Expenditure Database
     external funding on HIV, malaria and immunization as a share of spending on each, latest year; WHO TB financing
-    data for TB, funding received from the Global Fund, USAID and other grants ÷ all funding received, 2024; a
+    data for TB, funding received from the Global Fund, USAID and other grants ÷ all funding received, 2024 (TB itself now
+    uses the programme share in Step 4, not this pool); a
     WHO-region median where a country has no value: HIV 40 of 70 countries have their own value, TB 69, malaria 38,
     immunization 48). Bednets and spraying use the external share of *public* malaria spending (external ÷ (external
     + domestic government), GHED): campaign nets and spraying are financed by donors and governments, while the
@@ -448,7 +449,11 @@ with tabs[2]:
     md(f"""
     - **Continuity** = {pct('continuity')} (range {PRM.loc['continuity', 'low']:.0%}-{PRM.loc['continuity', 'high']:.0%}):
       the share of people who keep their service anyway (absorbed by government facilities, other donors or cheaper
-      delivery). *Assumption.* The 2025 US cuts give only indirect evidence, all under partial withdrawals with
+      delivery). The central value is 0 (it was 15% until November 2026), as in the published funding-cut models:
+      Clark et al. 2025 and Stover et al. 2025 (*Lancet Global Health*) assume cuts are not replaced and services fall
+      in proportion, and Mandal et al. 2025 test partial absorption only as a sensitivity. Governments stepping in is
+      the separate, explicit government-response setting (Step 2); the 0-30% range keeps some coping in the lower end
+      of the uncertainty ranges. *Assumption.* The 2025 US cuts give only indirect evidence, all under partial withdrawals with
       commodities still flowing: people on PEPFAR-supported ART "remained relatively stable" at 20.3M in FY2025 Q4
       vs 20.4M a year earlier (KFF, April 2026); at four defunded key-population NGOs in Uganda and Zimbabwe
       treatment fell "by 22% to 32%" (Cust & Chabata 2026, *Lancet Global Health*); TB treatment was "the least
@@ -528,36 +533,71 @@ with tabs[2]:
     {rng_txt('pmtct_vt_reduction')} (WHO: 15-45% without, under 5% with) x death by age 2 if infected
     {rng_txt('pmtct_infant_mort')} (Newell et al. 2004).
 
-    **TB.** Deaths per patient untreated = case fatality untreated - case fatality treated, weighted by the share of
-    TB patients with HIV (h, WHO TB/HIV incidence ÷ TB incidence), with the HIV-positive values depending on ART
-    (a = ART coverage):
+    **TB (redesigned November 2026).** TB is modelled in shares of the national TB programme, the way the published
+    TB models do it, instead of dividing lost dollars by a cost per treatment course. That older rule had no link to how
+    big a country's TB programme is: recorded TB aid could add up to more patients than the programme treats (Viet
+    Nam's TB aid in the OECD data, $31M, is more than its reported programme budget in some years). The LSHTM TB model
+    (Clark et al. 2025, *Lancet Global Health*; 79 countries, 2025-2035) assumes a funding cut lowers the rate at which
+    people start TB treatment in proportion to the share of the programme's budget lost, and runs a calibrated
+    transmission model. This model borrows its results, as it does for vaccines (VIMC) and malaria (Lives Saved Tool):
+
+    1. **Share of the programme lost** in a year, f = donor TB money lost after any government replacement ÷ the
+       programme's funding from all sources (WHO TB financing data, funding received, the latest two years with
+       domestic funding reported; `tb_prog_funding_usd`). Screens: a year over 4 times or under a quarter of the
+       country's usual total is dropped (Timor-Leste 2024: US$309M against US$2-10M); where the domestic amount is
+       copied forward unchanged and received funding falls short of expected funding, the budget file's expected
+       funding is used (Iraq, South Africa, Burundi); a blank domestic entry is "not reported", not zero, so those
+       countries take their WHO-region median (Liberia, Djibouti, Jamaica, Mauritius); Somalia, South Sudan and
+       Madagascar report domestic funding as zero and are 100% external. f is never more than the external share
+       (`tb_prog_ext_share`: Global Fund + USAID + other grants ÷ all funding) x the share of donor TB money lost. All
+       TB money counts (treatment, testing, systems, unspecified), because the study cuts every budget item in
+       proportion; the cap means money recorded beyond the programme can't remove more than its donor-funded part.
+       Then x (1 - continuity), as for every service.
+    2. **Fewer people starting treatment** = people starting TB treatment now (incidence x detection rate; for
+       drug-resistant TB, RR-TB incidence x enrolment) x f.
+    3. **Extra TB deaths** in that year = WHO TB deaths a year, all forms (HIV-negative + HIV-positive, latest year,
+       `tb_deaths_who`; draws move it across WHO's 95% interval, `tb_deaths_unc`) x g(f), never more than the people
+       not starting treatment x their case-fatality gap (the "never treated" ceiling; it binds only where few cases are
+       detected, Djibouti), with the TB ramp-up below, where g is fitted to all 22 death results the study publishes (Tables 1-2: USAID termination,
+       expected and full Global Fund cuts, the US cuts; by income group and WHO region), each predicted from the
+       study's own country budget cuts (its code repository) weighted by TB deaths:
     """)
-    st.latex(r"\Delta\text{CFR}=(1-h)\,(0.43-0.03)+h\,\big[0.78\,(1-a)+0.49\,a-0.06\,(1-0.3a)\big]")
+    st.latex(r"g(f)=m\,\big(0.371\,f+0.736\,f^{2}\big)")
     md(f"""
-    with untreated / treated case fatality {rng_txt('tb_cfr_untreated_neg')} / {rng_txt('tb_cfr_treated_neg')}
-    (HIV-negative; WHO TB burden estimation methods, Table 4). For HIV-positive people, untreated case fatality is
-    {rng_txt('tb_cfr_untreated_pos')} off ART and {rng_txt('tb_cfr_untreated_pos_art')} on ART for a year or more
-    (WHO Table 5), weighted by ART coverage; treated, {rng_txt('tb_cfr_treated_pos')} x (1 - 0.3a). The TB case
-    detection rate (notifications ÷ WHO's incidence estimate) is capped at 100%. TB and HIV deaths are per patient,
-    so they have no baseline death-rate trend. Drug-resistant TB: {rng_txt('tb_dr_dcfr')} deaths averted per patient treated
-    (*assumption*).
+    So losing 10% of the programme raises TB deaths about 4%, 25% about 14%, half about 37%, all of it about 111%. A
+    smaller cut does proportionally less harm because most people whose treatment start is delayed are still treated
+    later; a cut to a programme's whole budget leaves many untreated. The fit is close (chi-squared 16.2 on 20 degrees
+    of freedom; all 22 fitted values inside the published 95% intervals; `audit/tb_programme.py`,
+    `audit/logic_review/tb_clark_fit.csv`). m = {rng_txt('tb_resp_mult')}: the low end is the study's uncertainty
+    intervals; the high end, twice the curve, covers the higher published evidence (Mandal et al. 2025; WHO's estimates
+    for the COVID-19 disruption, about 0.15-0.2 TB deaths per missed diagnosis), so the ranges shown are wider above
+    the central estimate than below it.
+    A share {rng_txt('tb_transmission_share')} of the extra deaths come from extra TB cases (transmission): they arrive
+    half one year and half two years after the year of the cut, and those after 2030 count as deaths set in motion.
+    The share is the study's extra episodes x deaths per episode ÷ extra deaths (0.27 for USAID termination, 0.40 for
+    full Global Fund termination). The deaths are split between drug-susceptible and drug-resistant TB in proportion
+    to each line's people not starting treatment x its case-fatality gap (WHO Tables 4-5; drug-resistant
+    {rng_txt('tb_dr_dcfr')}).
 
-    **TB spread.** Each untreated TB patient (drug-sensitive or drug-resistant) causes {rng_txt('tb_secondary')}
-    further TB cases: about 10 people infected a year by an untreated smear-positive case (Styblo 1991) x ~60% of
-    pulmonary cases smear-positive (WHO) x 5-10% of those infected developing disease (Vynnycky & Fine 1997). Half the
-    new cases appear 1 year later and half 2 years later. They are treated at that year's (reduced) TB treatment
-    coverage, so each dies with probability coverage x treated CFR + (1 - coverage) x untreated CFR (same HIV mix as
-    above). Deaths before the end of 2030 are added to TB treatment; cases arriving in 2031-2032 are counted in
-    further deaths for 2031-2035, outside the 2026-2030 total. Only one year of infectiousness per untreated patient and no onward chains beyond
-    these secondary cases are modelled, so this is conservative (untreated TB typically lasts 2-3 years).
+    The study reports results to 2035 for cuts that last; this model applies its average yearly effect to each year of
+    a cut in 2026-2030. It has no country-level results, so one curve serves every country: it fits Europe (more
+    drug-resistant and HIV-positive TB) less well, where the study's deaths rise less than the curve gives, and the
+    Eastern Mediterranean, where they rise more. Where the aid data record less TB money than WHO's external funding
+    (Indonesia, the Philippines), the dollar rule in step 1 gives the smaller share lost. The earlier per-patient rule
+    (patients never treated = money lost ÷ cost per course, x the WHO case-fatality gap, plus {rng_txt('tb_secondary')}
+    secondary cases per untreated patient) is kept as the sensitivity switch `tb_legacy_cfr` (off). TB deaths have no
+    baseline death-rate trend. Before the review, `tb_deaths_total` added WHO's HIV-positive TB deaths to its
+    all-forms figure, which already includes them (South Africa 83,000 instead of 54,000); it is now the all-forms
+    figure.
 
-    **Timing of TB deaths (logic review L-15).** The whole case-fatality difference for a patient who goes untreated is
-    placed in the year the treatment is lost, although WHO's burden-estimation methods describe untreated TB as
-    lasting about three years; and the secondary cases arrive one and two years later (half each), although
-    Vynnycky and Fine 1997 find that most progression to disease happens within two to five years of infection. Both
-    are *labelled assumptions* about timing, not about the number of deaths: they shift deaths within and just beyond
-    the 2026-2030 window (earlier than a three-year spread would), so the five-year TB total is somewhat high and the
-    2031-2035 TB part somewhat low. No rule change (Batch 7, item 13).
+    **Checks against the published models (November 2026 review).** Our external shares agree with the ones the
+    study used (correlation 0.83, median difference 0.01, 48 shared countries). For the same US exit, the study's own
+    country budget shares would give about 67,000 TB deaths a year in the shared countries; this model gives about
+    31,000-37,000 (at the 15% continuity used then), because the aid data record less US money per programme than the
+    programmes report to WHO. Mandal et al. 2025 (*PLOS Global Public Health*, Avenir Health / Stop TB Partnership), whose
+    cut also lowers detection, report +68% TB deaths over 2025-2030 for a high-dependency country losing over 37% of
+    its programme for good, against +32% from this curve for a 45% loss. So the TB numbers here sit at the cautious end
+    of the published models. The TB case detection rate (notifications ÷ WHO's incidence estimate) is capped at 100%.
 
     **Malaria** uses the Lives Saved Tool form. Coverage after the cut feeds a multiplicative death reduction:
     """)
@@ -663,7 +703,7 @@ with tabs[2]:
       Madagascar, Pakistan, Djibouti, Bolivia; 8 at -5%, including India, Indonesia and Bangladesh).
     - The malaria rebound after vector control stops (`mal_resurgence`, see Step 4) is a separate *assumption*,
       applied only to deaths from lost bednets and spraying, on top of this baseline trend.
-    - TB and HIV effects are per patient and unchanged.
+    - TB deaths scale with the country's TB deaths now, and HIV effects are per patient: neither has a trend.
 
     **New HIV infections.** HIV prevention turns money into infections averted, and people off ART transmit HIV
     (see *Funding Paths*). Deaths from these adult infections are counted in the year they happen, up to 2035. Without
@@ -808,6 +848,8 @@ with tabs[3]:
     - Li X et al. 2021, *Lancet* (VIMC: lifetime vs under-5 vaccine deaths averted).
     - Newell ML et al. 2004, *Lancet* (mortality of HIV-infected infants).
     - WHO Global TB Report technical appendix, Glaziou et al. (TB case fatality, Tables 4-5).
+    - Clark RA, McQuaid CF, Richards AS et al. 2025, *Lancet Global Health* 13: e1517-24 (LSHTM TB model: TB deaths
+      when donor funding to national TB programmes falls; the TB deaths curve). Code: github.com/lshtm-tbmg/tbmod-pub-funding-impacts.
     - Styblo K 1991, *Epidemiology of tuberculosis* (infections caused per untreated smear-positive case).
     - Vynnycky E, Fine PEM 1997, *Epidemiology and Infection* (risk of disease after TB infection).
     - Cohen JM et al. 2012, *Malaria Journal* 11:122 (malaria resurgence after control programs weaken).

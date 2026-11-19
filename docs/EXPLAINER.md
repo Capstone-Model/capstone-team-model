@@ -268,7 +268,7 @@ Global Health Expenditure Database) for HIV, immunization and malaria treatment;
 spending for bednets and spraying; and WHO TB financing data for TB. In most lines donor money buys fewer people than the
 pool and the rule is simply lost money / cost.
 
-**Continuity.** 15% (range 0 to 30%) of the people who lose donor funding keep their service anyway (absorbed by
+**Continuity.** 0 (range 0 to 30%; 15% until November 2026, now 0 as in the published funding-cut models) of the people who lose donor funding keep their service anyway (absorbed by
 government facilities or cheaper delivery). Labelled assumption: the 2025 evidence (KFF: PEPFAR ART counts "remained
 relatively stable"; Cust & Chabata 2026: treatment "22% to 32%" lower at defunded NGOs; WHO: TB treatment "the least
 affected") all describes partial withdrawals with commodities still flowing, so no study measures the quantity.
@@ -511,7 +511,7 @@ yearly net loss by service and the people it buys:
 | Malaria Testing & Treatment | US$5.2 million | US$14 | 313,590 cases | not binding |
 | Routine Immunization | US$2.5 million | US$87 | 24,728 children | share 0.90; not binding |
 
-Each figure is already reduced by continuity (15%). The Numbers hero shows Treatment Lost Each Year 715,343 (ART
+Each figure was reduced by continuity (15% when these figures were made; it is 0 since November 2026). The Numbers hero shows Treatment Lost Each Year 715,343 (ART
 377,732, PMTCT 14,803, TB 9,218, malaria treatment 313,590) and Prevention Lost Each Year 4,387,592 (bednets, spraying,
 vaccines).
 
@@ -624,7 +624,7 @@ methods compared for Kenya.
 
 Direction: the way the headline would most likely move if the item were resolved (Higher, Lower, Unclear).
 
-- Continuity 15% is an assumption with no direct measurement; the sensitivity value is 30%. Direction: Lower if
+- Continuity (0 since November 2026, was 15%) is an assumption with no direct measurement; the range runs to 30%. Direction: Lower if
   continuity is higher (L-14 / IMP-16).
 - Testing-and-care money counted as lost ART at 50% is a stock proxy for a flow of diagnoses; the flow version is
   blocked for lack of a cost per initiation. Direction: Unclear (L-27 / IMP-02c).
@@ -710,7 +710,7 @@ deaths can exceed its own patients' deaths while staying below its people affect
 
 **Why is your HIV estimate lower than Optima's?** Optima's scenario removes all PEPFAR support for six years with zero
 new ART initiations and includes a 24% cut by the five largest donors; the model cuts US direct aid and 23% of its
-Global Fund pledge for five years, keeps 15% continuity and converts lost money at the full cost per patient-year. Over
+Global Fund pledge for five years, kept 15% continuity (0 since November 2026) and converts lost money at the full cost per patient-year. Over
 the 15 overlapping countries the model gives 0.39 of Optima's excess deaths and 0.36 of its infections; Kenya,
 Eswatini and the Dominican Republic agree within the band.
 
@@ -755,7 +755,7 @@ global ratios to it.
 summing; donor and channel cuts combine multiplicatively; systems money is not converted into patients because the
 unit costs already include above-site costs; the splits of unspecified money are checked to conserve the total.
 
-**Which numbers are assumptions rather than evidence?** Continuity (15%), the share of testing-and-care money counted
+**Which numbers are assumptions rather than evidence?** Continuity (0 since November 2026; was 15%), the share of testing-and-care money counted
 as lost ART (50%), the cost per HIV infection averted, the OVC cost, the drug-resistant TB deaths averted per patient,
 the effect of malaria interventions at age 5 and over (50%), the malaria rebound (10% a year), the default net use
 where no survey exists, the time newly infected people stay unsuppressed (4 years), the chance of dying of HIV when

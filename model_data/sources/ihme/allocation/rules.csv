@@ -1,5 +1,5 @@
 rule,label,need_k,eff_k,lambda,zero_aid,gain_vs_proj,lose_vs_proj
-cpl_need,Ability to pay + cost per life + need,4.0,4.0,0.427989994861881,23,48,34
-cpl,Ability to pay + cost per life,0.0,4.0,0.27313996919156974,21,49,33
+cpl_need,Ability to pay + cost per life + need,4.0,4.0,0.3230231977596432,24,48,34
+cpl,Ability to pay + cost per life,0.0,4.0,0.21323196471334963,22,48,34
 need,Ability to pay + need,4.0,0.0,0.172492921344329,23,48,34
 cap,Ability to pay only,0.0,0.0,0.11902191404313094,19,48,34

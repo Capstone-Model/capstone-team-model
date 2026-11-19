@@ -47,9 +47,11 @@ def test_solver_keeps_the_pool_and_caps_cuts_at_aid():
 
 def test_rules_and_zero_aid_counts():
     r = R["rules"]
-    assert r.at["cpl_need", "lambda"] == pytest.approx(0.366, abs=5e-4)
+    # TB redesign (Nov 2026): cost per life saved changed for TB, so the rules that use it moved (cpl_need 0.366 -> 0.251,
+    # zero-aid 19 -> 18; cpl 16 -> 15); the capacity-only and need rules don't use it and are unchanged
+    assert r.at["cpl_need", "lambda"] == pytest.approx(0.251, abs=5e-4)
     assert r.at["cap", "lambda"] == pytest.approx(0.0900, abs=5e-4)
-    assert r["zero_aid"].to_dict() == {"cpl_need": 19, "cpl": 16, "need": 13, "cap": 12}
+    assert r["zero_aid"].to_dict() == {"cpl_need": 18, "cpl": 15, "need": 13, "cap": 12}
 
 
 def test_need_tiers_reproduce_the_funding_gap_chart():

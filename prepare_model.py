@@ -223,11 +223,13 @@ def series(name: str) -> pd.DataFrame:
 
 
 def tb_deaths_series() -> pd.DataFrame:
-    """All TB deaths = HIV-negative + HIV-positive TB deaths, by country-year.
+    """All TB deaths (HIV-negative + HIV-positive), by country-year: WHO's all-forms series, which already includes
+    the HIV-positive deaths (South Africa 2024: 54,000 = 25,000 + 29,000). It used to add the HIV-positive series on
+    top, counting those deaths twice (TB redesign review, Nov 2026); the HIV-positive series is only a fallback.
     Feeds: the TB Poisson regression (Validation page)."""
     a = series("all_forms_of_tb_number_of_deaths_estimated").set_index(["iso3", "year"])["value"]
     b = series("tb_hivplus_number_of_deaths_estimated").set_index(["iso3", "year"])["value"]
-    return pd.concat([a, b], axis=1).sum(axis=1, min_count=1).rename("value").reset_index()
+    return a.combine_first(b).rename("value").reset_index()
 
 
 def annual_trend(d: pd.DataFrame, index) -> pd.Series:
@@ -423,7 +425,8 @@ def main(a):
         ci["income_group"] = e["income_groups"].reindex(ci.index)
     ci["hiv_pos_pregnancies"] = ci["births"] * ci["sh_dyn_aids_zs"] / 100 * 1.15     # female prevalence ~15% above all-adult
     ci["tb_hiv_share"] = (ci["tb_hivplus_incidence_estimated"] / ci["all_forms_of_tb_incidence_estimated"]).clip(0, 0.8)
-    ci["tb_deaths_total"] = ci["all_forms_of_tb_number_of_deaths_estimated"].fillna(0) + ci["tb_hivplus_number_of_deaths_estimated"].fillna(0)
+    # all-forms TB deaths already include HIV-positive TB deaths (WHO): not added again (TB redesign review, Nov 2026)
+    ci["tb_deaths_total"] = ci["all_forms_of_tb_number_of_deaths_estimated"].fillna(ci["tb_hivplus_number_of_deaths_estimated"]).fillna(0)
     # malaria: all-age deaths from child (1-59m) deaths; WHO: under-5s ~76% of malaria deaths in the African Region
     ci["is_ssa"] = ci.index.isin(SSA)
     u5_share = np.where(ci["is_ssa"], 0.76, 0.40)
