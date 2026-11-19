@@ -337,8 +337,9 @@ and the positive nonservice amounts, each as a separate amount (nonservice[care]
   - Else, if tb / cost > pool (donor money would buy more than the donor-funded pool): raw = pool x n / b (0 if
     b = 0, in which case n = 0 as well).
   - Else: raw = **n / cost**. (This is the usual case. There is no further scaling here.)
-- units = raw x (1 - continuity). continuity = 0.15 (0-0.30; assumption; Batch 3+4 IMP-16 found only indirect
-  evidence, recorded with 0.30 as a sensitivity value).
+- units = raw x (1 - continuity). continuity = 0 (0-0.30; assumption; central 0 since the Nov 2026 review, was
+  0.15, as in Clark et al. 2025, Stover et al. 2025 and Mandal et al. 2025; Batch 3+4 IMP-16 found only indirect
+  evidence; the range keeps some coping in the downside draws).
 - **TB (redesign, Nov 2026; tb_legacy_cfr = 0).** tb_ds and tb_dr do not use the branches above. With B_TB = baseline
   donor money on every TB line (tb_ds, tb_dr, tb_unspec, tb_hss), L_t = that year's TB money lost after replacement
   (sum over the TB lines of E_t[l] - R_t[l], plus nonservice[TB] - its replacement), s = `tb_prog_ext_share` and

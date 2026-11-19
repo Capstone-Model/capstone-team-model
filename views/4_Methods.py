@@ -449,7 +449,11 @@ with tabs[2]:
     md(f"""
     - **Continuity** = {pct('continuity')} (range {PRM.loc['continuity', 'low']:.0%}-{PRM.loc['continuity', 'high']:.0%}):
       the share of people who keep their service anyway (absorbed by government facilities, other donors or cheaper
-      delivery). *Assumption.* The 2025 US cuts give only indirect evidence, all under partial withdrawals with
+      delivery). The central value is 0 (it was 15% until November 2026), as in the published funding-cut models:
+      Clark et al. 2025 and Stover et al. 2025 (*Lancet Global Health*) assume cuts are not replaced and services fall
+      in proportion, and Mandal et al. 2025 test partial absorption only as a sensitivity. Governments stepping in is
+      the separate, explicit government-response setting (Step 2); the 0-30% range keeps some coping in the lower end
+      of the uncertainty ranges. *Assumption.* The 2025 US cuts give only indirect evidence, all under partial withdrawals with
       commodities still flowing: people on PEPFAR-supported ART "remained relatively stable" at 20.3M in FY2025 Q4
       vs 20.4M a year earlier (KFF, April 2026); at four defunded key-population NGOs in Uganda and Zimbabwe
       treatment fell "by 22% to 32%" (Cust & Chabata 2026, *Lancet Global Health*); TB treatment was "the least
@@ -589,8 +593,8 @@ with tabs[2]:
     **Checks against the published models (November 2026 review).** Our external shares agree with the ones the
     study used (correlation 0.83, median difference 0.01, 48 shared countries). For the same US exit, the study's own
     country budget shares would give about 67,000 TB deaths a year in the shared countries; this model gives about
-    31,000-37,000, because the aid data record less US money per programme than the programmes report to WHO (and
-    continuity keeps 15%). Mandal et al. 2025 (*PLOS Global Public Health*, Avenir Health / Stop TB Partnership), whose
+    31,000-37,000 (at the 15% continuity used then), because the aid data record less US money per programme than the
+    programmes report to WHO. Mandal et al. 2025 (*PLOS Global Public Health*, Avenir Health / Stop TB Partnership), whose
     cut also lowers detection, report +68% TB deaths over 2025-2030 for a high-dependency country losing over 37% of
     its programme for good, against +32% from this curve for a 45% loss. So the TB numbers here sit at the cautious end
     of the published models. The TB case detection rate (notifications ÷ WHO's incidence estimate) is capped at 100%.

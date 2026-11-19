@@ -166,7 +166,7 @@ none measures the quantity, so `continuity` stays an assumption).
 
 | Parameter | Value | Range | Why no evidence exists |
 |---|---|---|---|
-| `continuity` | 0.15 | 0-0.30 | No study measures the share of patients who keep the same service after its donor funding is withdrawn in a low- or middle-income country; the 2025 evidence covers partial withdrawals with commodities still flowing |
+| `continuity` | 0 (was 0.15 until Nov 2026; 0 as in the published funding-cut models) | 0-0.30 | No study measures the share of patients who keep the same service after its donor funding is withdrawn in a low- or middle-income country; the 2025 evidence covers partial withdrawals with commodities still flowing |
 | `hss_kappa` | 0.5 | 0.25-0.9 | Testing-and-care money funds a flow of diagnoses and retention, not a stock of patients; no cost per initiation exists to model the flow |
 | `hss_service_share` | 0 | constant (0.5 as a sensitivity case) | No study quantifies how much systems money (labs, HR, M&E, supply chain) becomes service delivery; the unit-cost markup already prices above-site costs |
 | `cpia_ref` | 5,000 US$ per infection averted | 2,500-12,000 | Prevention mixes differ by country; no single cost per infection averted; affects infections only |
