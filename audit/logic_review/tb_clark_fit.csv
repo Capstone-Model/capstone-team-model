@@ -1,0 +1,23 @@
+scenario,relative_to,group,n_countries,published_pct,published_lo,published_hi,fitted_pct,within_ui
+scen_usaid,status quo,All,79,5.0,4.1,5.9,5.105,True
+scen_usaid,status quo,LIC,16,18.1,13.8,23.3,15.546,True
+scen_usaid,status quo,LMIC,34,3.7,2.8,4.6,3.708,True
+scen_usaid,status quo,UMIC,29,2.0,0.6,3.2,2.14,True
+scen_usaid,status quo,AFR,29,12.1,9.6,14.7,11.677,True
+scen_usaid,status quo,EMR,12,1.4,0.9,2.1,1.07,True
+scen_usaid,status quo,EUR,6,1.7,-0.8,4.4,3.436,True
+scen_usaid,status quo,SEAR,9,2.7,1.8,3.5,2.247,True
+scen_usaid,status quo,WPR,10,2.9,-0.1,6.1,2.794,True
+scen_usaid_gf_expcut_noNGO,scen_usaid,All,79,12.2,9.2,14.6,12.486,True
+scen_usaid_gf_expcut_noNGO,scen_usaid,LIC,16,22.0,17.7,27.4,21.259,True
+scen_usaid_gf_expcut_noNGO,scen_usaid,LMIC,34,10.3,8.0,13.0,10.512,True
+scen_usaid_gf_expcut_noNGO,scen_usaid,UMIC,29,12.1,2.7,19.9,11.393,True
+scen_usaid_gf_expcut_noNGO,scen_usaid,AFR,29,15.6,12.1,19.2,16.134,True
+scen_usaid_gf_expcut_noNGO,scen_usaid,AMR,13,0.8,-0.1,1.6,1.581,True
+scen_usaid_gf_expcut_noNGO,scen_usaid,EMR,12,32.1,22.0,42.4,23.764,True
+scen_usaid_gf_expcut_noNGO,scen_usaid,EUR,6,4.5,-1.3,10.8,10.248,True
+scen_usaid_gf_expcut_noNGO,scen_usaid,SEAR,9,9.5,4.5,13.3,9.485,True
+scen_usaid_gf_expcut_noNGO,scen_usaid,WPR,10,7.2,2.3,11.0,9.573,True
+scen_usaid_gf,scen_usaid,All,79,38.1,27.0,47.8,35.624,True
+scen_usaid_USA_expcut,scen_usaid,All,79,8.8,6.6,10.4,8.919,True
+scen_usaid_USA,scen_usaid,All,79,9.6,7.2,11.4,9.753,True

@@ -13,8 +13,11 @@ A country-level model for HIV, TB, malaria and immunization:
   3. COVERAGE  net money lost / unit cost = people who lose a service; divided by the population in need it gives
                the coverage drop (percentage points), never more than the people currently covered.
   4. LIVES     people losing a service x the mortality effect of that service, using country epidemiology:
-               ART interruption hazards, WHO TB case-fatality ratios, Lives Saved Tool equations for malaria,
-               VIMC deaths averted per fully immunized child by country and years since vaccination (Batch 5+6).
+               ART interruption hazards, Lives Saved Tool equations for malaria, VIMC deaths averted per fully
+               immunized child by country and years since vaccination (Batch 5+6). TB (Nov 2026 redesign) works in
+               shares, as the LSHTM TB model does: the share of the national TB programme budget lost (donor TB money
+               lost / the programme's funding, WHO, capped at its external share) lowers treatment starts in
+               proportion, and TB deaths rise by a curve fitted to Clark et al. 2025 (tb_curve).
 
 Every uncertain parameter is drawn from a triangular(low, central, high) distribution; results report the median
 and the 2.5-97.5 percentile range of the Monte Carlo draws.
@@ -60,7 +63,7 @@ LINE_LABELS = {
     "mal_cm": "Malaria testing & treatment", "imm": "Routine immunization (vaccines + delivery)",
 }
 UNIT_LABELS = {"hiv_art": "people who stop ART (full-cost equivalents)", "hiv_pmtct": "HIV+ pregnant women", "hiv_prev": "infections averted",
-               "hiv_ovc": "children supported", "tb_ds": "TB patients treated", "tb_dr": "DR-TB patients treated",
+               "hiv_ovc": "children supported", "tb_ds": "fewer people starting TB treatment", "tb_dr": "fewer people starting DR-TB treatment",
                "mal_itn": "people sleeping under nets", "mal_irs": "people protected by spraying",
                "mal_cm": "malaria cases treated", "imm": "children immunized"}
 UNIT_SINGULAR = {"hiv_art": "patient-year of ART", "hiv_pmtct": "woman", "hiv_prev": "infection averted",
@@ -103,6 +106,8 @@ ART_MULT_UP = 0.38              # uc_art_mult high (1.38) minus 1: maps the draw
 IMM_LAGS = 10
 IMM_MULT_LO, IMM_MULT_HI = 0.56, 1.64
 DR_TB_SHARE, DR_TB_COV = 0.04, 0.45     # fallbacks only: countries use WHO's RR-TB share and enrolment (IMP-11)
+TB_LINES = ("tb_ds", "tb_dr")
+TB_ARRIVAL = (0.5, 0.5)                 # extra TB cases (transmission) appear 1 and 2 years after the year of the cut
 # how unspecified money (IHME program area not reported) is split by purpose (Batch 3+4, L-43): the country's Global
 # Fund module shares in country_inputs.csv (unspec_<disease>_<purpose>; batch34_inputs.py). Treatment and prevention
 # shares go to those lines by the country's mix; the testing share is treated like HIV testing-and-care money (kappa
@@ -709,6 +714,71 @@ def per_unit_levels(row: pd.Series, P: dict, art_cov: float, trend: bool = True)
     }
 
 
+def tb_legacy(P: dict) -> bool:
+    """True when TB uses the rule before the Nov 2026 redesign (donor money lost / cost per treatment course = patients
+    never treated, x the WHO case-fatality gap, plus secondary cases): the sensitivity switch tb_legacy_cfr = 1."""
+    return float(np.ravel(P.get("tb_legacy_cfr", np.zeros(1)))[0]) >= 0.5
+
+
+def tb_programme_share(row: pd.Series) -> float:
+    """External share of the national TB programme's funding (country_inputs.csv tb_prog_ext_share, WHO TB financing
+    pooled over the latest two years with domestic funding reported; audit/tb_programme.py): the share of the
+    programme a full cut of donor TB money removes. Falls back to donor_share_tb, then 1.
+    Feeds: the TB programme share lost each year (run_country) and the TB deaths per dollar."""
+    s = _v(row, "tb_prog_ext_share")
+    if np.isnan(s):
+        s = _v(row, "donor_share_tb", 1.0)
+    return float(np.clip(1.0 if np.isnan(s) else s, 0.0, 1.0))
+
+
+def tb_programme_funding(row: pd.Series) -> float:
+    """The national TB programme's funding a year from all sources (country_inputs.csv tb_prog_funding_usd, WHO, the
+    same years as tb_prog_ext_share; US$), or NaN. The share of the programme lost = donor TB money lost / this, capped
+    at the external share (tb_share_lost)."""
+    v = _v(row, "tb_prog_funding_usd")
+    return v if v > 0 else np.nan
+
+
+def tb_share_lost(lost, donor_base: float, ext_share: float, prog_usd: float):
+    """Share of the national TB programme's budget lost in a year: donor TB money lost / the programme's funding from
+    all sources (WHO), as Clark et al. 2025 compute it, but never more than the external share x the share of donor TB
+    money lost, so donor money recorded beyond the programme (Viet Nam: more TB aid than its reported programme) can't
+    remove more than the donor-funded part. Without a programme total: the external share x the share lost.
+    lost: US$ (array); returns an array in 0-1."""
+    lost = np.clip(np.asarray(lost, dtype=float), 0.0, None)
+    f = ext_share * lost / donor_base if donor_base > 0 else np.zeros_like(lost)
+    if not np.isnan(prog_usd):
+        f = np.minimum(f, lost / prog_usd)
+    return np.clip(f, 0.0, 1.0)
+
+
+def tb_deaths_base(row: pd.Series, P: dict | None = None):
+    """WHO estimated TB deaths a year, all forms (HIV-negative + HIV-positive; country_inputs.csv tb_deaths_who, latest
+    year, from the WHO burden file), the level the TB deaths curve scales; the all-forms column if missing. With P:
+    one value per draw, moved toward WHO's 95% interval by tb_deaths_unc (-1 = the low end, +1 = the high end)."""
+    d = _v(row, "tb_deaths_who")
+    if np.isnan(d):
+        d = _v(row, "all_forms_of_tb_number_of_deaths_estimated", 0.0)
+    if P is None:
+        return d
+    u = np.asarray(P.get("tb_deaths_unc", np.zeros(1)), dtype=float)
+    lo, hi = _v(row, "tb_deaths_who_lo", d), _v(row, "tb_deaths_who_hi", d)
+    return np.where(u < 0, d + u * (d - lo), d + u * (hi - d))
+
+
+def tb_curve(P: dict, f) -> np.ndarray:
+    """Rise in TB deaths (share of the country's TB deaths a year) when the national TB programme loses a share f of
+    its budget: tb_resp_mult x (tb_resp_lin f + tb_resp_quad f^2), fitted to the 22 results of Clark et al. 2025
+    (LSHTM TB model; audit/tb_programme.py). f: draws x years (or draws); P arrays have one value per draw.
+    Feeds: TB deaths 2026-2030 and after 2030, the TB deaths per dollar, the Validation cross-check."""
+    f = np.clip(np.asarray(f, dtype=float), 0.0, 1.0)
+    shape = (-1,) + (1,) * (f.ndim - 1) if f.ndim > 1 else (-1,)
+    lin = np.asarray(P["tb_resp_lin"], dtype=float).reshape(shape)
+    quad = np.asarray(P["tb_resp_quad"], dtype=float).reshape(shape)
+    mult = np.asarray(P["tb_resp_mult"], dtype=float).reshape(shape)
+    return mult * (lin * f + quad * f ** 2)
+
+
 def imm_legacy(row: pd.Series, P: dict) -> bool:
     """True when the vaccine pathway uses the pre-Batch-5+6 rule (imm_deaths_per_child_ref x imm_u5_share x
     clip(U5MR / 50, 0.3, 2.5), cohort weights 0.40 / 0.35 / 0.20 / 0.05): the sensitivity switch
@@ -1105,11 +1175,29 @@ def run_country(iso3: str, scenario: Scenario, fiscal: Fiscal, inputs: dict, pta
             if not np.isnan(irs):
                 ep["cov_source"]["mal_irs"] = f"implied by donor spending; {ep['cov_source']['mal_irs']}: {irs:.0%}"
     pudc = per_unit_deaths(row, Pc, ep["art_cov"], mortality_trend)
+    # TB (Nov 2026 redesign): TB works in shares of the national TB programme, as the LSHTM TB model does. Every TB
+    # money line counts (treatment, testing, systems, unspecified: the study cuts all budget items in proportion); the
+    # share of the programme lost in a year = TB money lost after replacement / the programme's funding from all sources
+    # (WHO), capped at the external share x the share of donor TB money lost (tb_share_lost), so donor money that is out
+    # of scope for the programme can't remove more than the donor-funded share. tb_legacy_cfr = 1, or a country without a treatment count, keeps the per-patient rule.
+    tb_need0, tb_cov0 = ep["need_cov"]["tb_ds"]
+    tb_starts = tb_need0 * tb_cov0 if not (np.isnan(tb_need0) or np.isnan(tb_cov0)) else np.nan
+    tb_money = [l for l in base.index if FULL_LINE_BUCKET.get(l) == "TB"]
+    tb_base = float(base.reindex(tb_money).sum()) if tb_money else 0.0
+    tb_new = (not tb_legacy(Pc)) and not np.isnan(tb_starts) and tb_starts > 0 and tb_base > 0
+    tb_share = tb_programme_share(row)
+    tb_prog = tb_programme_funding(row)
+    tb_D = tb_deaths_base(row)
 
     # deaths per $ (central) for "lives first" ranking; malaria via a small marginal LiST calculation
     def deaths_per_dollar(l):
         """Deaths over 5 years per US$ lost on one service line (central parameters), used to rank lines for the 'lives
-        first' allocation. Malaria uses a small Lives Saved Tool calculation for US$1M."""
+        first' allocation. Malaria uses a small Lives Saved Tool calculation for US$1M. TB (redesign): the deaths of a
+        full cut of donor TB money over 5 years / donor TB money, the same for every TB line."""
+        if tb_new and l in TB_LINES:
+            f_full = float(tb_share_lost(tb_base, tb_base, tb_share, tb_prog)) * (1 - float(Pc["continuity"][0]))
+            cap = tb_starts * f_full * float(pudc["tb_ds"][0, -1])        # the never-treated ceiling, as in lives()
+            return float(N_YEARS * min(tb_D * tb_curve(Pc, f_full)[0], cap) / tb_base)
         if l in pudc:
             return float(pudc[l].sum() / ucc[l][0])
         if l.startswith("mal_"):
@@ -1136,21 +1224,35 @@ def run_country(iso3: str, scenario: Scenario, fiscal: Fiscal, inputs: dict, pta
             repn = {b: budget * v / safe for b, v in posn.items()}
         else:                                  # lives first: most deaths averted per dollar gets refilled first
             left = np.full_like(np.asarray(tot, dtype=float), budget)
-            for l in sorted(MONEY_LINES, key=lambda k: -dpd[k]):
-                take = np.minimum(left, pos[l])
-                rep[l], left = take, left - take
-            sn = sum(posn.values())
-            repn = {b: np.minimum(v, left * v / np.where(sn > 0, sn, 1)) for b, v in posn.items()}
+            # TB systems / unspecified money costs lives under the TB redesign, so it is refilled at the TB rank
+            ranked = [(l, pos[l]) for l in MONEY_LINES]
+            if tb_new and "TB" in posn:
+                ranked.append(("ns:TB", posn["TB"]))
+            for k, v in sorted(ranked, key=lambda kv: -(dpd["tb_ds"] if kv[0] == "ns:TB" else dpd[kv[0]])):
+                take = np.minimum(left, v)
+                left = left - take
+                if k == "ns:TB":
+                    repn["TB"] = take
+                else:
+                    rep[k] = take
+            rest = {b: v for b, v in posn.items() if not (tb_new and b == "TB")}
+            sn = sum(rest.values()) if rest else 0.0
+            repn.update({b: np.minimum(v, left * v / np.where(sn > 0, sn, 1)) for b, v in rest.items()})
         return rep, repn
 
     # per year: effective loss scaled by the path, replacement allocated, net loss by line
     years = range(N_YEARS)
     effc_t, repc_t, repnc_t, net_t, netc_t, nsc_t_all = [], [], [], [], [], []
+    tb_net_t, tb_netc_t = [], []                     # all TB money lost after replacement, per year (draws, central)
     for t in years:
         e_t, ns_t = effective(gross_t[t], P["hss_kappa"], P["hss_service_share"])
         ec_t, nsc_t = effective(gross_t[t], Pc["hss_kappa"], Pc["hss_service_share"])
-        r, _ = allocate(e_t, ns_t, budget_t[t])
+        r, rn = allocate(e_t, ns_t, budget_t[t])
         rc, rnc = allocate(ec_t, nsc_t, budget_t[t])
+        for out_, e_, ns_, r_, rn_, nn in ((tb_net_t, e_t, ns_t, r, rn, n), (tb_netc_t, ec_t, nsc_t, rc, rnc, 1)):
+            tot_ = sum(np.asarray(e_[l], dtype=float) - r_[l] for l in TB_LINES)
+            tot_ = tot_ + np.asarray(ns_.get("TB", 0.0), dtype=float) - rn_.get("TB", 0.0)
+            out_.append(np.clip(np.broadcast_to(tot_, (nn,)).astype(float), 0.0, None))
         effc_t.append(ec_t)
         repc_t.append(rc)
         repnc_t.append(rnc)
@@ -1190,12 +1292,23 @@ def run_country(iso3: str, scenario: Scenario, fiscal: Fiscal, inputs: dict, pta
         b0 = float(np.asarray(effc_base[l]).ravel()[0])
         funded[l] = b0 / float(ucc[l][0]) if np.isnan(covered) else min(covered * dsh, b0 / float(ucc[l][0]))
         excess[l] = bool(not np.isnan(covered) and b0 / float(ucc[l][0]) > covered * dsh * (1 + 1e-9))   # tolerance: ties
-        if excess[l] and (iso3, l) not in _EXCESS_LOGGED:
+        if excess[l] and (iso3, l) not in _EXCESS_LOGGED and not (tb_new and l in TB_LINES):
             _EXCESS_LOGGED.add((iso3, l))
             log.warning("%s %s: donor aid ($%.0f) buys %.0f units at $%.0f each, more than the donor-funded pool of %.0f "
                         "(%.0f people covered x external share %.2f); units lost scaled proportionally", iso3, l, b0,
                         b0 / float(ucc[l][0]), float(ucc[l][0]), covered * dsh, covered, dsh)
         capped[l] = False
+        if tb_new and l in TB_LINES:
+            # TB redesign: treatment starts fall by the share of the programme lost (Clark et al. 2025), x (1 -
+            # continuity) as for every service; the people counted are this line's people starting treatment
+            excess[l], donor_share[l] = False, tb_share
+            funded[l] = covered * tb_share if not np.isnan(covered) else np.nan
+            for t in years:
+                f_d = tb_share_lost(tb_net_t[t], tb_base, tb_share, tb_prog) * (1 - P["continuity"])
+                f_c = tb_share_lost(tb_netc_t[t], tb_base, tb_share, tb_prog) * (1 - Pc["continuity"])
+                cv = 0.0 if np.isnan(covered) else covered
+                units[l][:, t], unitsc[l][:, t] = cv * f_d, cv * f_c
+            continue
         # linked money (HIV testing and care -> ART) adds to this line's money lost and its base, but whether donor
         # money buys more than everyone covered is judged on the line's own money only (audit I-09)
         links = [k for k, t in LINKED.items() if t == l]
@@ -1228,7 +1341,6 @@ def run_country(iso3: str, scenario: Scenario, fiscal: Fiscal, inputs: dict, pta
     u5_trend = _v(row, TREND_COLUMNS["u5"])
     u5_trend = (FALLBACK_MORTALITY_TREND if np.isnan(u5_trend) else u5_trend) if mortality_trend else 0.0
     IMM_COHORT = np.diff(np.r_[0.0, LAG["imm"]])       # a missed birth cohort's deaths by years since: .40 .35 .20 .05 0
-    TB_ARRIVAL = (0.5, 0.5)                            # secondary TB cases appear 1 and 2 years after the untreated year
 
     def lives(Px, U):
         """Deaths (n x 5), infections (n x 5) and deaths in 2031-2035 set in motion by the 2026-2030 losses (dict of n
@@ -1265,30 +1377,60 @@ def run_country(iso3: str, scenario: Scenario, fiscal: Fiscal, inputs: dict, pta
                         d["imm"][:, t] += U["imm"][:, s_] * w_imm[:, k]
                     elif t < N_YEARS + POST_YEARS:
                         after["imm"] += U["imm"][:, s_] * w_imm[:, k]
-        # TB spread: untreated person-years cause secondary cases 1-2 years later, treated at that year's reduced
-        # coverage; cases arriving after 2030 are set in motion by the cut
-        h = _v(row, "tb_hiv_share", 0.0)
-        a_ = 0.0 if np.isnan(ep["art_cov"]) else ep["art_cov"]
-        cfr_u = (1 - h) * Px["tb_cfr_untreated_neg"] + h * (Px["tb_cfr_untreated_pos"] * (1 - a_)
-                                                            + Px["tb_cfr_untreated_pos_art"] * a_)
-        cfr_t = (1 - h) * Px["tb_cfr_treated_neg"] + h * Px["tb_cfr_treated_pos"] * (1 - 0.3 * a_)
-        ok_tb = not (np.isnan(tb_need) or np.isnan(tb_cov) or tb_need <= 0)
-        cov_t = [np.clip(tb_cov - U["tb_ds"][:, t] / tb_need, 0, 1) if ok_tb else np.full(nx, 0.0) for t in years]
-        after["tb"] = np.zeros(nx)
-        # secondary deaths belong to the line whose lost patients generated them (tb_ds or tb_dr), so each line's
-        # deaths stay within its own people affected (Batch 3+4: with systems money no longer converted, a line can
-        # have no lost patients while the other TB line has some)
-        for src in ("tb_ds", "tb_dr"):
-            for s_ in years:
-                sec = U[src][:, s_] * Px["tb_secondary"]
-                for k, share in enumerate(TB_ARRIVAL, start=1):
-                    t = s_ + k
-                    c = cov_t[min(t, N_YEARS - 1)]
-                    dd = sec * share * (c * cfr_t + (1 - c) * cfr_u)
-                    if t < N_YEARS:
-                        d[src][:, t] += dd
-                    else:
-                        after["tb"] += dd
+        if tb_new:
+            # TB redesign (Clark et al. 2025): extra TB deaths in a year of cut = WHO TB deaths x the fitted curve of
+            # the share of the programme lost that year (tb_curve), with the TB ramp-up. tb_transmission_share of them
+            # come from extra TB cases and arrive 1-2 years later (after 2030: deaths set in motion); the rest happen in
+            # the year itself. Split between drug-susceptible and drug-resistant TB by each line's people not starting
+            # treatment x its case-fatality gap (per_unit_levels), so each line keeps the deaths of its own people.
+            ftb = U["tb_ds"] / tb_starts
+            ramp = np.array([LAG["tb_ds"][k] for k in dur])
+            w_ds, w_dr = U["tb_ds"] * lv["tb_ds"], U["tb_dr"] * lv["tb_dr"]
+            w_all = w_ds + w_dr
+            # never more than if every person not starting treatment went untreated for good (their case-fatality gap):
+            # binds where few TB cases are detected, so most TB deaths are among people the programme never reaches
+            # (Djibouti, 41% detected) and scaling all TB deaths by the curve would overstate the effect of a cut
+            extra = np.minimum(np.asarray(tb_deaths_base(row, Px))[:, None] * tb_curve(Px, ftb), w_all) * ramp[None, :]
+            s_tr = np.asarray(Px["tb_transmission_share"], dtype=float)
+            share = {"tb_ds": np.divide(w_ds, w_all, out=np.ones_like(w_all), where=w_all > 0)}
+            share["tb_dr"] = 1.0 - share["tb_ds"]
+            after["tb"] = np.zeros(nx)
+            for src in TB_LINES:
+                part = extra * share[src]
+                d[src] = (1 - s_tr)[:, None] * part
+                for s_ in years:
+                    sec = s_tr * part[:, s_]
+                    for k, sh_ in enumerate(TB_ARRIVAL, start=1):
+                        t = s_ + k
+                        if t < N_YEARS:
+                            d[src][:, t] += sec * sh_
+                        else:
+                            after["tb"] += sec * sh_
+        else:
+            # TB spread: untreated person-years cause secondary cases 1-2 years later, treated at that year's reduced
+            # coverage; cases arriving after 2030 are set in motion by the cut
+            h = _v(row, "tb_hiv_share", 0.0)
+            a_ = 0.0 if np.isnan(ep["art_cov"]) else ep["art_cov"]
+            cfr_u = (1 - h) * Px["tb_cfr_untreated_neg"] + h * (Px["tb_cfr_untreated_pos"] * (1 - a_)
+                                                                + Px["tb_cfr_untreated_pos_art"] * a_)
+            cfr_t = (1 - h) * Px["tb_cfr_treated_neg"] + h * Px["tb_cfr_treated_pos"] * (1 - 0.3 * a_)
+            ok_tb = not (np.isnan(tb_need) or np.isnan(tb_cov) or tb_need <= 0)
+            cov_t = [np.clip(tb_cov - U["tb_ds"][:, t] / tb_need, 0, 1) if ok_tb else np.full(nx, 0.0) for t in years]
+            after["tb"] = np.zeros(nx)
+            # secondary deaths belong to the line whose lost patients generated them (tb_ds or tb_dr), so each line's
+            # deaths stay within its own people affected (Batch 3+4: with systems money no longer converted, a line can
+            # have no lost patients while the other TB line has some)
+            for src in ("tb_ds", "tb_dr"):
+                for s_ in years:
+                    sec = U[src][:, s_] * Px["tb_secondary"]
+                    for k, share in enumerate(TB_ARRIVAL, start=1):
+                        t = s_ + k
+                        c = cov_t[min(t, N_YEARS - 1)]
+                        dd = sec * share * (c * cfr_t + (1 - c) * cfr_u)
+                        if t < N_YEARS:
+                            d[src][:, t] += dd
+                        else:
+                            after["tb"] += dd
         # HIV treatment cohorts (2026-2030, and those still off care in 2031-2035)
         hz, trans, reengage, unsup = hiv_art_params(row, Px)
         d["hiv_art"], inf["hiv_art"], post_d, post_i, off_post = art_cohorts(U["hiv_art"], hz, trans, reengage, unsup)
@@ -1519,7 +1661,12 @@ def statistical_crosscheck(res: dict, inputs: dict, ptab: pd.DataFrame) -> pd.Da
             if not np.isnan(cov0):
                 units = min(units, cov0 / 100 * need)
             rec[f"cov_drop_pp{tag}"] = -dpp
-            rec[f"deaths_5y{tag}"] = units * float(pud[line].sum())
+            if b == "TB" and not tb_legacy(Pc) and not np.isnan(cov0) and cov0 > 0:
+                # TB redesign: the drop as a share of people starting treatment -> the fitted deaths curve, 5 years
+                f = float(np.clip(units / (cov0 / 100 * need), 0, 1))
+                rec[f"deaths_5y{tag}"] = tb_deaths_base(row) * float(tb_curve(Pc, f)[0]) * float(LAG["tb_ds"].sum())
+            else:
+                rec[f"deaths_5y{tag}"] = units * float(pud[line].sum())
         mech = res["lines"].set_index("line").loc[line]
         rec["line"] = line
         rec["mech_cov_drop_pp"] = mech["cov_drop_pp"]

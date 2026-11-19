@@ -252,8 +252,11 @@ and the positive nonservice amounts, each as a separate amount (nonservice[care]
   - Money lines are refilled in descending order of central deaths per US$ (dpd), each up to its own loss, until
     B_t runs out.
   - What is left goes to the nonservice amounts in proportion, each up to its own amount.
-  - dpd[l] for hiv_pmtct, hiv_prev, hiv_ovc, tb_ds and tb_dr = (sum over d = 0..4 of level_l,d x LAG_l[d]) /
-    cost_l. dpd[imm]: section 6 (cumulative `imm_dpc_lag`). Levels are as in section 6, at the central run, calendar-indexed. hiv_prev and hiv_ovc have level 0.
+  - dpd[l] for hiv_pmtct, hiv_prev, hiv_ovc = (sum over d = 0..4 of level_l,d x LAG_l[d]) / cost_l (and for
+    tb_ds, tb_dr when tb_legacy_cfr = 1). TB redesign (tb_legacy_cfr = 0): dpd[tb_ds] = dpd[tb_dr] = 5 x D_TB x
+    g(f_full) / B_TB, with f_full = tb_share_lost(B_TB) x (1 - continuity) (section 6), and nonservice[TB] is refilled
+    at that same rank (all TB money cuts TB services under the redesign); the other nonservice amounts share what is
+    left. dpd[imm]: section 6 (cumulative `imm_dpc_lag`). Levels are as in section 6, at the central run, calendar-indexed. hiv_prev and hiv_ovc have level 0.
   - dpd[hiv_art] = art_hazard_mult x sum(ART_HAZARD[1..5]) / cost_art (ART_HAZARD_LEGACY when hiv_legacy_art_params = 1).
   - dpd for malaria lines = sum over t = 0..4 of (that line's malaria part from section 6, with 1,000,000 / cost_l
     units on that line alone and 0 on the others) x LAG_l[t] x f_mal,t, divided by 1,000,000. This uses calendar t
@@ -336,6 +339,16 @@ and the positive nonservice amounts, each as a separate amount (nonservice[care]
   - Else: raw = **n / cost**. (This is the usual case. There is no further scaling here.)
 - units = raw x (1 - continuity). continuity = 0.15 (0-0.30; assumption; Batch 3+4 IMP-16 found only indirect
   evidence, recorded with 0.30 as a sensitivity value).
+- **TB (redesign, Nov 2026; tb_legacy_cfr = 0).** tb_ds and tb_dr do not use the branches above. With B_TB = baseline
+  donor money on every TB line (tb_ds, tb_dr, tb_unspec, tb_hss), L_t = that year's TB money lost after replacement
+  (sum over the TB lines of E_t[l] - R_t[l], plus nonservice[TB] - its replacement), s = `tb_prog_ext_share` and
+  P = `tb_prog_funding_usd` (`country_inputs.csv`; `audit/tb_programme.py`):
+
+      f_t = clip(min(s x L_t / B_TB, L_t / P), 0, 1) x (1 - continuity)        (s x L_t / B_TB alone if P is missing)
+      units_l,t = covered_l x f_t                                          (covered = need x coverage, section 4)
+
+  s falls back to `donor_share_tb`, then 1. If tb_ds has no covered count, or B_TB = 0, the branches above apply.
+  `donor_exceeds_cost` is False for TB; donor_funded_units = covered x s.
 - If need and coverage both exist, units = min(units, cap), with cap = covered for hiv_art and coverage x need
   otherwise.
 - units = max(units, 0).
@@ -365,8 +378,8 @@ for a sudden cut; also 0 if no row is ever cut, which then has no effect). For t
 otherwise dur_t = 0. LAG and the malaria rebound are indexed by dur_t. Mortality
 trends are indexed by calendar t.
 
-**Trend factors.** Only malaria deaths and vaccine deaths have a baseline trend. TB and HIV deaths are per patient
-(case fatality of an untreated vs a treated patient; the ART hazard), so their counterfactual is flat (L-10).
+**Trend factors.** Only malaria deaths and vaccine deaths have a baseline trend. TB deaths scale today's WHO TB deaths
+and HIV deaths are per patient (the ART hazard), so their counterfactual is flat (L-10).
 - f_u5,t = (1 + trend_u5mr)^t.
 - f_mal,t = (1 + trend_malaria_deaths)^t.
 - Both use -0.009 if the trend is missing, and equal 1 when the "already-changing death rates" switch is off.
@@ -382,9 +395,25 @@ trends are indexed by calendar t.
 - tb_dr: tb_dr_dcfr.
 - imm: level_t = imm_deaths_per_child_ref x imm_u5_share x clip(U5MR x f_u5,t / 50, 0.3, 2.5).
 
-**PMTCT, TB treatment:** deaths_t = units_t x level x LAG_l[dur_t].
+**PMTCT:** deaths_t = units_t x level x LAG_l[dur_t].
 
-**TB spread.**
+**TB (redesign, tb_legacy_cfr = 0).** With f_t = units_tb_ds,t / covered_tb_ds (the share above), D_TB =
+`tb_deaths_total` (WHO deaths a year, HIV-negative + HIV-positive; `all_forms_of_tb_number_of_deaths_estimated` if
+missing; `tb_deaths_total` itself is now the all-forms figure, which already includes HIV-positive TB deaths), and the curve fitted to Clark et al. 2025 (`audit/tb_programme.py`; `audit/logic_review/tb_clark_fit.csv`):
+
+      g(f) = tb_resp_mult x (tb_resp_lin f + tb_resp_quad f^2)          tb_resp_lin 0.371, tb_resp_quad 0.736
+      X_t  = min(D_TB x g(f_t), w_ds,t + w_dr,t) x LAG_tb_ds[dur_t]     extra TB deaths caused by year t's cut
+             (D_TB per draw: tb_deaths_who moved toward tb_deaths_who_lo / _hi by tb_deaths_unc in -1..1; the min is
+              the never-treated ceiling, w below; dpd uses the same ceiling)
+      w_l,t = units_l,t x level_l (dCFR for tb_ds, tb_dr_dcfr for tb_dr); share_l,t = w_l,t / (w_ds,t + w_dr,t)
+      deaths_l,t += (1 - tb_transmission_share) x X_t x share_l,t
+      deaths_l,t+1 and t+2 += tb_transmission_share x X_t x share_l,t x 0.5 each; arrivals after 2030 -> part "tb"
+
+No secondary-case step (tb_secondary is not used): the study's results include transmission.
+
+**TB treatment (tb_legacy_cfr = 1):** deaths_t = units_t x level x LAG_l[dur_t], and:
+
+**TB spread (tb_legacy_cfr = 1).**
 - In each year s, secondary cases = (units_tb_ds,s + units_tb_dr,s) x tb_secondary. Half arrive in year s+1 and half
   in s+2.
 - Coverage c_t = clip(TB detection % / 100 - units_tb_ds,t / TB incidence, 0, 1) (0 if TB need or coverage is

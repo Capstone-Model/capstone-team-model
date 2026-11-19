@@ -166,10 +166,26 @@ def test_late_vaccine_cut_committed(iso):
     assert early["committed"]["after_parts"]["imm"] >= after - 1e-6   # a 2026 cut leaves 5 cohorts, 4 with a tail
 
 
-# (h) TB spread: more secondary cases -> more TB deaths and more committed deaths; none without a cut
+# (h) TB spread (Nov 2026 redesign): the transmission share only moves deaths later in time. With none, every TB death
+# falls in the year of the cut and nothing is set in motion after 2030; with more, deaths after 2030 rise and the total
+# (2026-2035) is unchanged
 @pytest.mark.parametrize("iso", COUNTRIES)
 def test_tb_transmission(iso):
-    lo, hi = run_p(iso, with_param(tb_secondary=0.0)), run_p(iso, with_param(tb_secondary=0.8))
+    lo, hi = run_p(iso, with_param(tb_transmission_share=0.0)), run_p(iso, with_param(tb_transmission_share=0.4))
+    L = lambda r: r["lines"].set_index("line")                                          # noqa: E731
+    tb5 = lambda r: L(r).loc["tb_ds", "deaths_5y"] + L(r).loc["tb_dr", "deaths_5y"]     # noqa: E731
+    assert lo["committed"]["after_parts"]["tb"] == 0
+    assert close(tb5(lo), tb5(hi) + hi["committed"]["after_parts"]["tb"])
+    if tb5(lo) > 1:
+        assert hi["committed"]["after_parts"]["tb"] > 0 and tb5(hi) < tb5(lo)
+
+
+# (h2) the rule before the redesign (tb_legacy_cfr = 1): more secondary cases -> more TB deaths and more committed
+# deaths; none without spread
+@pytest.mark.parametrize("iso", COUNTRIES)
+def test_tb_transmission_legacy(iso):
+    lo = run_p(iso, with_param(tb_secondary=0.0, tb_legacy_cfr=1.0))
+    hi = run_p(iso, with_param(tb_secondary=0.8, tb_legacy_cfr=1.0))
     tb = lambda r: r["lines"].set_index("line").loc["tb_ds", "deaths_5y"]
     assert tb(hi) >= tb(lo) - 1e-9 and hi["committed"]["after_parts"]["tb"] >= 0
     assert lo["committed"]["after_parts"]["tb"] == 0

@@ -10,6 +10,7 @@ from the evidence tables in audit/logic_review/ (which are built from the raw da
     python batch34_inputs.py --art-full56 # Batch 5+6 item A1: the same with the observed-spending validity test, the Rosen-based floor and the gate on the final value
     python batch34_inputs.py --donor56    # Batch 5+6 items A2-A3: external share of PUBLIC spending for HIV and immunization; intervention-specific donor shares for the malaria lines
     python batch34_inputs.py --vaccines   # Batch 5+6 item V2: deaths averted per fully immunized child (VIMC) and their timing
+    python batch34_inputs.py --tb-programme  # TB redesign (Nov 2026): external share of national TB programme funding (audit/tb_programme.py)
 
 Columns written (all with a `_source` column saying whether the value is the country's own or a fallback):
   unspec_<disease>_{treatment,prevention,testing,rssh,pm}   shares of unspecified money by purpose (sum to 1)
@@ -23,6 +24,11 @@ Columns written (all with a `_source` column saying whether the value is the cou
   donor_share_mal_itn, _mal_irs, _mal_cm (Batch 5+6 item A3) intervention-specific donor share = donor money for the line / (people covered x unit cost), capped at 1
   imm_dpc, imm_dpc_lo, imm_dpc_hi, imm_dpc_lag0..lag9, imm_dpc_beyond_window, imm_q5_ratio, imm_antigens (Batch 5+6 item V2)
                                                              deaths averted per fully immunized child (VIMC, 2015-19, x Q5 ratio) and by years since vaccination
+  tb_prog_ext_share, _source, _year (TB redesign, Nov 2026)  external share of national TB programme funding, WHO, pooled
+                                                             over the latest two years with domestic funding reported
+  tb_prog_funding_usd (TB redesign)                          the programme's funding a year from all sources, same years
+  tb_deaths_who, _lo, _hi, _year (TB redesign)               WHO estimated TB deaths a year (all forms), latest year, 95% interval
+  tb_deaths_total (TB redesign fix)                          = all-forms TB deaths (it double-counted HIV-positive TB deaths)
   flag_itn_default, flag_irs_household, flag_irs_implied, flag_map_who_gap (Batch 7 item 14)
                                                              malaria-input caveats L-07, L-21, L-22, L-23 (audit/batch7_flags.py)
 Called on its own after the evidence tables change; prepare_model.py (full rebuild) does not rebuild these columns.
@@ -130,6 +136,21 @@ def apply_flags(ci: pd.DataFrame) -> pd.DataFrame:
     return ci
 
 
+def apply_tb_programme(ci: pd.DataFrame) -> pd.DataFrame:
+    """TB redesign (Nov 2026): the external share of national TB programme funding (audit/tb_programme.py), the share of
+    the programme a full cut of donor TB money removes."""
+    t = pd.read_csv(EV / "tb_programme_share.csv").set_index("iso3").reindex(ci.index)
+    for c in ("tb_prog_ext_share", "tb_prog_ext_source", "tb_prog_ext_year", "tb_prog_funding_usd",
+              "tb_deaths_who", "tb_deaths_who_lo", "tb_deaths_who_hi", "tb_deaths_who_year"):
+        ci[c] = t[c]
+    # tb_deaths_total was all-forms deaths + HIV-positive TB deaths, but WHO's all-forms figure already includes the
+    # HIV-positive deaths (South Africa 54,000 = 25,000 HIV-negative + 29,000 HIV-positive, counted as 83,000): it is the
+    # all-forms figure (prepare_model.py now builds it the same way)
+    af = ci["all_forms_of_tb_number_of_deaths_estimated"]
+    ci["tb_deaths_total"] = af.where(af.notna(), ci["tb_hivplus_number_of_deaths_estimated"])
+    return ci
+
+
 def apply_donor(ci: pd.DataFrame) -> pd.DataFrame:
     t = pd.read_csv(EV / "batch34_donor_share.csv").set_index("iso3").reindex(ci.index)
     for b, tag in (("HIV", "hiv"), ("TB", "tb"), ("Malaria", "malaria"), ("Malaria_prev", "malaria_prev"), ("Immunization", "imm")):
@@ -160,6 +181,8 @@ def main():
         ci, done = apply_donor56_malaria(ci), done + ["donor56-malaria"]
     if "--vaccines" in sys.argv:
         ci, done = apply_vaccines(ci), done + ["vaccines"]
+    if "--tb-programme" in sys.argv:
+        ci, done = apply_tb_programme(ci), done + ["tb-programme"]
     if "--flags" in sys.argv:
         ci, done = apply_flags(ci), done + ["flags"]
     if not done:

@@ -865,7 +865,8 @@ CAUSE_PHRASE = {"HIV": "people losing HIV treatment and prevention", "TB": "untr
 # averted)
 CARE_LABELS = {"mal_itn": "bednet users", "mal_irs": "people under indoor spraying", "hiv_art": "people who stop ART*",
                "mal_cm": "malaria patients", "imm": "children unvaccinated",
-               "hiv_pmtct": "HIV+ pregnant women", "tb_ds": "TB patients", "tb_dr": "drug-resistant TB patients"}
+               "hiv_pmtct": "HIV+ pregnant women", "tb_ds": "people not starting TB treatment",
+               "tb_dr": "people not starting drug-resistant TB treatment"}
 # L-40: the hero shows treatment and prevention separately; units are what the lost money would have paid for
 TREATMENT_LINES = ["hiv_art", "hiv_pmtct", "tb_ds", "tb_dr", "mal_cm"]
 PREVENTION_LINES = ["mal_itn", "mal_irs", "imm"]
@@ -875,7 +876,8 @@ ART_UNIT_NOTE = ("People who stop ART = the full-cost equivalents of the lost mo
                  "a count of patients at donor-supported sites, where support may be withdrawn thinly across more "
                  "people.")
 TREATMENT_TIP = ("Treatment the lost money would have paid for, each year the cut lasts, under the selected scenario "
-                 "and government response: people who stop ART, HIV+ pregnant women (PMTCT), TB patients and malaria "
+                 "and government response: people who stop ART, HIV+ pregnant women (PMTCT), people not starting TB "
+                 "treatment (people starting now x the share of the national TB programme's budget lost) and malaria "
                  "patients treated. " + ART_UNIT_NOTE)
 PREVENTION_TIP = ("Prevention the lost money would have paid for, each year the cut lasts: people sleeping under a "
                   "bednet (person-years of net use), people protected by indoor spraying and children vaccinated.")
@@ -1214,7 +1216,7 @@ def _country_results(iso3, country_name, ctl, sk, imf):
 # Headline, comparison, cards
 # --------------------------------------------------------------------------- #
 AFTER_2030_PARTS = {"hiv_art": "people still off HIV treatment", "hiv_infections": "new HIV infections",
-                    "imm": "children who missed vaccines", "tb": "TB spread by untreated patients"}
+                    "imm": "children who missed vaccines", "tb": "extra TB cases from transmission"}
 
 
 def after_2030_help(C) -> str:
@@ -1267,7 +1269,9 @@ def systems_note(ptab) -> str:
     """How systems money enters the model (logic review L-05, Batch 3+4); value from hss_service_share."""
     k = float(ptab.loc["hss_service_share", "central"])
     return (f"{k:.0%} of lost systems money (labs, staff, monitoring, supply chain) is counted as lost services: it is "
-            "above-site money that the cost per patient already includes (assumption, logic review L-05).")
+            "above-site money that the cost per patient already includes (assumption, logic review L-05). TB is "
+            "the exception: all lost TB money counts toward the share of the national TB programme lost (TB redesign, "
+            "Nov 2026).")
 
 
 def people_lost(res) -> float:
