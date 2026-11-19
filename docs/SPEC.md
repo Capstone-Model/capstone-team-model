@@ -32,10 +32,13 @@ readers who want to check it; nothing here requires reading the code.
 
 | File | Contents |
 |---|---|
-| `model_data/dah_lines.csv` | Baseline aid, average of 2021-2023, US$ a year: `iso3, src_grp, chan_grp, usd, line, bucket`. One row = country x donor group x channel group x line |
+| `model_data/sources/<ihme\|oecd>/dah_lines.csv` | **What the dashboard runs on.** Baseline aid in 2023, US$, from the selected projection workbook (IHME or OECD toggle): `iso3, src_grp, chan_grp, usd, line, bucket`, plus each cell's own yearly cuts `cut_2026` .. `cut_2030`, `known_cut_*`, `mou_pred_cut_*` (`announcement_model/workbook_inputs.py`) |
+| `model_data/sources/<ihme\|oecd>/announcement_cuts.csv` | All health areas, every workbook recipient, by country x donor group x channel group: `base_kusd` (2023) and the same cut columns. Feeds the money headline, known vs predicted chart and phase-out by funder |
+| `model_data/sources/<ihme\|oecd>/all_countries_*.csv`, `allocation/*.csv` | Precomputed All Countries and Reallocation results for that source |
+| `model_data/dah_lines.csv` | Legacy baseline (average of 2021-2023, IHME), kept for the tests: `iso3, src_grp, chan_grp, usd, line, bucket`. One row = country x donor group x channel group x line |
 | `model_data/country_inputs.csv` | One row per country (`iso3`) |
 | `model_data/ihme_trend.csv` | IHME 2025 / 2021-23 ratio: `src_grp, chan_grp, bucket, ratio` |
-| `model_data/announcement_cuts.csv` | Announced donor cuts: `iso3, src_grp, chan_grp, base_kusd, cut_2026` .. `cut_2030`, `known_cut_*`, `mou_pred_cut_*` (`announcement_model/project_cuts.py`) |
+| `model_data/announcement_cuts.csv` | Legacy Announced donor cuts (`announcement_model/project_cuts.py`, 2019-2023 base), kept for the tests: `iso3, src_grp, chan_grp, base_kusd, cut_2026` .. `cut_2030`, `known_cut_*`, `mou_pred_cut_*` |
 | `model_params.csv` | Parameters: `central, low, high` |
 | `unit_cost_reference.csv` | ART site costs (`art_site_cost` by country, `art_site_default` arv / non_arv) and TB costs (`tb_ds_cost`, `tb_dr_cost` by income group), with `cost_year` |
 
@@ -138,7 +141,7 @@ For each row of `dah_lines` (donor s, channel c, bucket b):
 | Total-Aid Cuts (OECD) Applied to Health Aid (key `OECD-reported 2025 aid cuts`) | US 0.57, Germany 0.174, France 0.109, United Kingdom 0.108, Japan 0.056 | the same values | none | none |
 | Global Fund & Gavi | none | none | none | Global Fund 0.20, Gavi 0.15 (user-set) |
 | Combined | US 1.0; Germany, France, UK, Japan as OECD | Germany, France, UK, Japan as OECD (US 0) | as US Bilateral Exit | none |
-| Announced donor cuts (dashboard default) | yearly cut per row = `cut_<y>` for (country, donor group, channel group) from `announcement_cuts.csv`; else the country x donor baseline-weighted average; else pooled over countries; else 0 | | | |
+| Announced donor cuts (dashboard default) | yearly cut per row = the row's own `cut_<y>` from the selected source's `dah_lines.csv`: 1 - sum(share x Proj y) / sum(share x Baseline) over the workbook flows in that cell, share = the flow's money on that service line. (Legacy inputs without cut columns: `cut_<y>` for (country, donor group, channel group) from `announcement_cuts.csv`; else the country x donor average; else pooled; else 0) | | | |
 
 So under US Bilateral Exit + Multilateral Withdrawals (77% of the US Global Fund pledge kept), US money through every other multilateral channel (UNICEF, UNAIDS, development banks, EU
 institutions) has cut 0.

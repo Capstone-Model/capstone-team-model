@@ -473,6 +473,17 @@ hr {{ border-color: {RULE} !important; }}
 [class*="st-key-cutsl_"] [data-testid="stWidgetLabel"] p {{ color: {ROSE}; font-weight: 600; font-size: 12px; }}
 [class*="st-key-govsl_"] [data-testid="stWidgetLabel"] p {{ color: {BLUE}; font-weight: 600; font-size: 12px; }}
 
+/* ---- aid data source switch (app.py): a radio drawn as two joined buttons, the chosen one filled ---- */
+.st-key-src_bar [role="radiogroup"] {{ display: inline-flex; gap: 0 !important; border: 1px solid {RULE};
+    border-radius: 8px; overflow: hidden; }}
+.st-key-src_bar [role="radiogroup"] label {{ margin: 0 !important; padding: 6px 26px; cursor: pointer;
+    border-left: 1px solid {RULE}; }}
+.st-key-src_bar [role="radiogroup"] label:first-child {{ border-left: none; }}
+.st-key-src_bar [role="radiogroup"] label > div:first-child {{ display: none; }}    /* the radio dot */
+.st-key-src_bar [role="radiogroup"] label p {{ font-weight: 600; color: {INK}; }}
+.st-key-src_bar [role="radiogroup"] label:has(input:checked) {{ background: {BRAND}; }}
+.st-key-src_bar [role="radiogroup"] label:has(input:checked) p {{ color: {SURFACE}; }}
+
 /* ---- no app chrome: the page should read like a website ---- */
 [data-testid="stAppDeployButton"], [data-testid="stMainMenu"], #MainMenu, [data-testid="stDecoration"],
 [data-testid="stStatusWidget"], [data-testid="stToolbarActions"], footer {{ display: none !important; }}

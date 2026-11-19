@@ -90,10 +90,11 @@ def test_pmtct_women_outside_art_pool():
 def test_card_is_full_model_for_1m_uniform_cut(iso):
     pj = P.to_json(orient="split")
     cards = {c["bucket"]: c for c in ms._per_million_cards(iso, pj, True, iso)}
+    DI = ms._inputs()                                   # the dashboard's inputs (the selected aid data source)
     for b in hm.BUCKETS:
-        aid = LINES.loc[(LINES.iso3 == iso) & (LINES.bucket == b), "usd"].sum()
+        aid = DI["lines"].loc[(DI["lines"].iso3 == iso) & (DI["lines"].bucket == b), "usd"].sum()
         cut = min(1.0, 1e6 / aid)
-        r = hm.run_country(iso, hm.uniform_scenario(b, cut), hm.Fiscal(), I, P, n_draws=0)
+        r = hm.run_country(iso, hm.uniform_scenario(b, cut), hm.Fiscal(), DI, P, n_draws=0)
         B = r["buckets"].set_index("bucket")
         k = 1e6 / B.loc[b, "gross_loss_usd"]
         assert "deaths" not in cards[b]                 # the dashboard shows coverage only
@@ -104,11 +105,13 @@ def test_card_is_full_model_for_1m_uniform_cut(iso):
 
 
 def test_card_without_aid_says_so(monkeypatch):
-    lines = LINES[~((LINES.iso3 == "HND") & (LINES.bucket == "Malaria"))]
-    monkeypatch.setattr(ms, "_inputs", lambda: dict(I, lines=lines))
-    ms._card_runs.clear()
+    DI = ms._inputs()
+    lines = DI["lines"][~((DI["lines"].iso3 == "HND") & (DI["lines"].bucket == "Malaria"))]
+    monkeypatch.setattr(ms, "_inputs", lambda: dict(DI, lines=lines))
+    monkeypatch.setattr(ms, "_inputs_for", lambda src: dict(DI, lines=lines))
+    ms._card_runs_c.clear()
     c = {c["bucket"]: c for c in ms._per_million_cards("HND", P.to_json(orient="split"), True, "Honduras")}
-    ms._card_runs.clear()
+    ms._card_runs_c.clear()
     assert c["Malaria"]["no_deaths"] == "No malaria aid in Honduras" and c["Malaria"]["people_n"] is None
     assert "No malaria aid in Honduras" in ms._card_html(c["Malaria"])
     assert ms.CARDS_TITLE == "What Every US$1 Million Cut Does, by Disease"

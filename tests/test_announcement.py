@@ -187,7 +187,7 @@ def test_phase_out_by_funder():
     donor and everyone else add up to the total base and loss."""
     import model_section as ms
     d = ms.phase_out_by_donor("KEN")
-    a = hm.announcement_sources("KEN")
+    a = hm.announcement_sources("KEN", source=ms.source())       # the dashboard's selected aid data source
     assert {"United States", "Global Fund", "Gavi"} <= set(d.index)
     assert d["base"].sum() == pytest.approx(a["base"].sum())
     assert (d["base"] * d["cut_2030"]).sum() == pytest.approx(a["lost_2030"].sum())

@@ -46,7 +46,10 @@ NO_REPLACEMENT = "No Government Replacement"
 GOV_MODES = {NO_REPLACEMENT: "none", "Replace a set share": "custom",
              "As much as fiscal space allows": "max", "Gradual budget increase": "gradual"}
 RANGE_LABEL, RANGE_TIP = th.RANGE_LABEL, th.RANGE_TIP
-SRC_MODEL = "Model estimates from IHME aid data (2021-23 average), WHO, UNAIDS and World Bank data; see Methods."
+def src_model() -> str:
+    """The 'Source:' line under the model's charts, naming the aid data source picked at the top of the page."""
+    return (f"Model estimates from {hm.SOURCES[source()]} aid data ({hm.SOURCE_BASE_YEAR}), WHO, UNAIDS and World "
+            "Bank data; see Methods.")
 SHOW_BRIEF = False                   # the Download Country Brief button (code kept for later)
 PRESET_SHORT = {
     "Full US exit": "US bilateral health aid ends and the US leaves WHO, Gavi and UNFPA; its Global Fund pledge falls "
@@ -59,7 +62,7 @@ PRESET_SHORT = {
     "OECD-reported 2025 aid cuts": "Each donor's 2025 cut in total aid, all sectors (US -57%, Germany -17%, France -11%, "
                                    "UK -11%, Japan -6%), applied to its health aid.",
     "Global Fund & Gavi shortfalls": "All donors' money through Gavi and the Global Fund falls by the share set "
-                                     "below, against each fund's 2021-23 disbursements.",
+                                     "below, against each fund's disbursements in the model baseline (2023).",
     "Combined retreat": "US Bilateral Exit + Multilateral Withdrawals plus the OECD-reported 2025 total-aid cuts for every other donor.",
     "Announced donor cuts": "Each donor's announced aid cut, the same on every channel, except where a channel's own "
                             "cut is published (Global Fund allocations, MOUs, Gavi pledges, exits): then that number.",
@@ -74,9 +77,24 @@ ALLOCS = {"Pro-rata to what was cut": "pro_rata", LIVES_FIRST: "lives_first"}
 # --------------------------------------------------------------------------- #
 # Cached model calls
 # --------------------------------------------------------------------------- #
+def source() -> str:
+    """The aid data source picked in the toggle at the top of every page ("ihme" or "oecd")."""
+    s = st.session_state.get("data_source", hm.DEFAULT_SOURCE)
+    return s if s in hm.SOURCES else hm.DEFAULT_SOURCE
+
+
+def source_dir():
+    """model_data/sources/<source>/: the selected source's aid inputs and precomputed results."""
+    return hm.source_dir(source())
+
+
 @st.cache_resource(show_spinner=False)
+def _inputs_for(src: str):
+    return hm.load_inputs(source=src)
+
+
 def _inputs():
-    return hm.load_inputs()
+    return _inputs_for(source())
 
 
 @st.cache_data(show_spinner=False)
@@ -85,17 +103,25 @@ def _default_params() -> pd.DataFrame:
 
 
 @st.cache_data(show_spinner=False, max_entries=64)
-def _run(iso3, sc_key, fiscal_t, ptab_json, trend=True, n_draws=400, cut_path=None, gov_add=None):
+def _run_c(src, iso3, sc_key, fiscal_t, ptab_json, trend=True, n_draws=400, cut_path=None, gov_add=None):
     """Cached by (country, scenario, response, parameters, trend, cut path, government-money path), so moving a
     slider back to an earlier value is instant. cut_path / gov_add: tuples of 5 (None = sudden cut, no extra money)."""
     ptab = pd.read_json(io.StringIO(ptab_json), orient="split")
-    return hm.run_country(iso3, scn.scenario_from_key(sc_key), hm.Fiscal(*fiscal_t), _inputs(), ptab, n_draws=n_draws,
+    return hm.run_country(iso3, scn.scenario_from_key(sc_key), hm.Fiscal(*fiscal_t), _inputs_for(src), ptab, n_draws=n_draws,
                           mortality_trend=trend, cut_path=cut_path, gov_add_usd=gov_add)
 
 
+def _run(iso3, sc_key, fiscal_t, ptab_json, trend=True, n_draws=400, cut_path=None, gov_add=None):
+    return _run_c(source(), iso3=iso3, sc_key=sc_key, fiscal_t=fiscal_t, ptab_json=ptab_json, trend=trend, n_draws=n_draws, cut_path=cut_path, gov_add=gov_add)
+
+
 @st.cache_data(show_spinner=False, max_entries=64)
+def _break_even_c(src, iso3, sc_key, fiscal_t, cut_path):
+    return hm.break_even_share(iso3, scn.scenario_from_key(sc_key), hm.Fiscal(*fiscal_t), _inputs_for(src), cut_path)
+
+
 def _break_even(iso3, sc_key, fiscal_t, cut_path):
-    return hm.break_even_share(iso3, scn.scenario_from_key(sc_key), hm.Fiscal(*fiscal_t), _inputs(), cut_path)
+    return _break_even_c(source(), iso3=iso3, sc_key=sc_key, fiscal_t=fiscal_t, cut_path=cut_path)
 
 
 def run_ctl(iso3, sk, ctl, **kw):
@@ -105,16 +131,20 @@ def run_ctl(iso3, sk, ctl, **kw):
 
 
 @st.cache_data(show_spinner=False, max_entries=32)
-def _dose(iso3, bucket, fiscal_t, ptab_json, trend=True):
+def _dose_c(src, iso3, bucket, fiscal_t, ptab_json, trend=True):
     # 21 points (0-100% in 5% steps); run_country draws its parameters with the same seed at every point, so the band
     # is built from the same random draws all along the curve
     ptab = pd.read_json(io.StringIO(ptab_json), orient="split")
-    return hm.dose_response(iso3, bucket, hm.Fiscal(*fiscal_t), _inputs(), ptab, grid=np.linspace(0, 1, 21), n_draws=100,
+    return hm.dose_response(iso3, bucket, hm.Fiscal(*fiscal_t), _inputs_for(src), ptab, grid=np.linspace(0, 1, 21), n_draws=100,
                             mortality_trend=trend)
 
 
+def _dose(iso3, bucket, fiscal_t, ptab_json, trend=True):
+    return _dose_c(source(), iso3=iso3, bucket=bucket, fiscal_t=fiscal_t, ptab_json=ptab_json, trend=trend)
+
+
 @st.cache_data(show_spinner=False, max_entries=32)
-def _scenario_path(iso3, sc_key, bucket, fiscal_t, ptab_json, trend=True, cut_path=None, gov_add=None):
+def _scenario_path_c(src, iso3, sc_key, bucket, fiscal_t, ptab_json, trend=True, cut_path=None, gov_add=None):
     """This scenario's own path for one bucket: every cut scaled from 0% to 100% of its size (21 points, the same
     draws as the even-cut curve), as (share of the bucket's aid lost, extra deaths over 5 years)."""
     ptab = pd.read_json(io.StringIO(ptab_json), orient="split")
@@ -122,7 +152,7 @@ def _scenario_path(iso3, sc_key, bucket, fiscal_t, ptab_json, trend=True, cut_pa
     for k in np.linspace(0, 1, 21):
         sc = scn.scenario_from_key(sc_key)
         sc.scale = float(k)
-        r = hm.run_country(iso3, sc, hm.Fiscal(*fiscal_t), _inputs(), ptab, n_draws=100, mortality_trend=trend,
+        r = hm.run_country(iso3, sc, hm.Fiscal(*fiscal_t), _inputs_for(src), ptab, n_draws=100, mortality_trend=trend,
                            cut_path=cut_path, gov_add_usd=gov_add)
         bb = r["buckets"].set_index("bucket").loc[bucket]
         rows.append({"k": k, "cut": bb["gross_loss_usd"] / bb["base_usd"] if bb["base_usd"] > 0 else 0.0,
@@ -130,18 +160,26 @@ def _scenario_path(iso3, sc_key, bucket, fiscal_t, ptab_json, trend=True, cut_pa
     return pd.DataFrame(rows)
 
 
+def _scenario_path(iso3, sc_key, bucket, fiscal_t, ptab_json, trend=True, cut_path=None, gov_add=None):
+    return _scenario_path_c(source(), iso3=iso3, sc_key=sc_key, bucket=bucket, fiscal_t=fiscal_t, ptab_json=ptab_json, trend=trend, cut_path=cut_path, gov_add=gov_add)
+
+
 @st.cache_data(show_spinner="Running the model for every country...", max_entries=16)
-def _run_all(sc_key, fiscal_t, ptab_json, trend=True):
+def _run_all_c(src, sc_key, fiscal_t, ptab_json, trend=True):
     ptab = pd.read_json(io.StringIO(ptab_json), orient="split")
-    return hm.run_all(scn.scenario_from_key(sc_key), hm.Fiscal(*fiscal_t), _inputs(), ptab,
+    return hm.run_all(scn.scenario_from_key(sc_key), hm.Fiscal(*fiscal_t), _inputs_for(src), ptab,
                       n_draws=scn.ALL_COUNTRY_DRAWS, mortality_trend=trend)
 
 
+def _run_all(sc_key, fiscal_t, ptab_json, trend=True):
+    return _run_all_c(source(), sc_key=sc_key, fiscal_t=fiscal_t, ptab_json=ptab_json, trend=trend)
+
+
 @st.cache_data(show_spinner=False)
-def _precomputed(preset: str, _mtime: float) -> pd.DataFrame:
-    """A precomputed All Countries file with its per-draw totals attached (scenarios.load_precomputed); _mtime only
-    invalidates the cache when the file changes."""
-    return scn.load_precomputed(hm.MODEL_DIR, preset)
+def _precomputed(preset: str, _mtime: float, src: str | None = None) -> pd.DataFrame:
+    """A precomputed All Countries file with its per-draw totals attached (scenarios.load_precomputed), for the
+    selected aid data source; _mtime only invalidates the cache when the file changes."""
+    return scn.load_precomputed(hm.source_dir(src or source()), preset)
 
 
 # --------------------------------------------------------------------------- #
@@ -302,7 +340,7 @@ def _resp_label(fiscal_t) -> str:
 SHORTFALL_SLIDERS = {
     "gavi_cut": ("Gavi Funding Cut", scn.GAVI_CUT_DEFAULT,
                  ["~15%: fall vs 2021-23 spending (our estimate)", "24%: gap vs Gavi's US$11.9B target"],
-                 "Cut on every donor's money through Gavi, against Gavi's 2021-23 disbursements (the model baseline). "
+                 "Cut on every donor's money through Gavi, against Gavi's disbursements in the model baseline (2023). "
                  "Gavi 6.0 raised more than US$9B for 2026-2030 (including leftover COVID funds and earlier pledges) "
                  "against a US$11.9B target; the US made no new contribution. That is about US$1.75B a year in 2023 "
                  "US$, about 15% below Gavi's 2021-23 spending excluding COVID (US$2.06B a year in IHME's data; our "
@@ -310,8 +348,8 @@ SHORTFALL_SLIDERS = {
     "gf_cut": ("Global Fund Funding Cut", scn.GF_CUT_DEFAULT,
                ["15%: allocation cut in MOU countries (KFF, Jun 2026)", "~20%: pledges vs previous replenishment",
                 "~24%: median cut in allocation letters (Aidspan)", "30%: gap vs US$18B target"],
-               "Cut on every donor's money through the Global Fund, against its 2021-23 disbursements (the model "
-               "baseline). Eighth Replenishment final total US$12.64B (Global Fund Board, Feb 2026) vs a US$18B target "
+               "Cut on every donor's money through the Global Fund, against its disbursements in the model "
+               "baseline (2023). Eighth Replenishment final total US$12.64B (Global Fund Board, Feb 2026) vs a US$18B target "
                "and US$15.7B in the Seventh; 2026-2028 country allocations US$10.78B. KFF (Jun 2026) finds allocations "
                "in MOU countries down 15% vs the original GC7 allocations (range 5% Niger to 53% Guatemala); Aidspan's "
                "median is about -24%. All nominal; real cuts are somewhat deeper."),
@@ -355,20 +393,25 @@ MOU_SHAPE = "Follows MOU schedule"   # internal path label: the scenario carries
 ANNOUNCED_SHAPE = "Announced phase-out"   # same for Announced donor cuts: each cell's yearly cut is in the scenario
 
 
-@st.cache_data(show_spinner=False, max_entries=256)
 def announced_path(iso3: str) -> dict:
-    """Announced donor cuts for one country, 2026-2030: base aid a year (2019-2023 average), US$ lost each year, the
+    """announced_path_c for the aid data source picked at the top of the page (part of the cache key)."""
+    return announced_path_c(source(), iso3)
+
+
+@st.cache_data(show_spinner=False, max_entries=256)
+def announced_path_c(src: str, iso3: str) -> dict:
+    """Announced donor cuts for one country, 2026-2030: base aid a year (2023, selected data source), US$ lost each year, the
     part of it that is known (published numbers), the predicted rest ("predicted", including "mou_pred": US money in
     a country without an MOU, which ends), and the share of aid cut ("cut"). Covers all
     health aid ("all": True) where the cut model has the country, else only HIV, TB, malaria and vaccine aid."""
-    tot = hm.announcement_totals().get(iso3)
+    tot = hm.announcement_totals(source=src).get(iso3)
     if tot is not None and tot["base"] > 0:
         lost = np.clip(tot["lost"], 0.0, None)
         known = np.clip(np.minimum(tot["known"], lost), 0.0, None)
         mou_pred = np.clip(np.minimum(tot.get("mou_pred", np.zeros_like(lost)), lost - known), 0.0, None)
         return {"base": tot["base"], "lost": lost, "known": known, "predicted": lost - known, "mou_pred": mou_pred,
                 "cut": lost / tot["base"], "all": True}
-    I = _inputs()
+    I = _inputs_for(src)
     cells = I["lines"][I["lines"].iso3 == iso3]
     sc = scn.build_scenario(scn.ANNOUNCED, scn.default_opts(scn.ANNOUNCED, I["ci"]), I["ci"])
     usd = cells["usd"].to_numpy()
@@ -417,9 +460,9 @@ PHASE_OECD = ["United Kingdom", "Germany", "France", "Japan", "Canada", "Netherl
 def phase_out_by_donor(iso3: str) -> pd.DataFrame:
     """Announced donor cuts for one country by funder: the US (all its channels except the Global Fund and Gavi), the
     Global Fund and Gavi (every donor's money through them), each OECD donor's other channels, and everyone else
-    together. Rows: funder; columns base (US$ a year, 2019-2023) and cut_<year> (share of base cut). Empty when the
+    together. Rows: funder; columns base (US$ a year, 2023) and cut_<year> (share of base cut). Empty when the
     cut model doesn't cover the country."""
-    a = hm.announcement_sources(iso3)
+    a = hm.announcement_sources(iso3, source=source())
     if a.empty:
         return pd.DataFrame()
     grp = np.where(a["chan_grp"].isin(["Global Fund", "Gavi"]), a["chan_grp"],
@@ -443,7 +486,7 @@ def _spread(vals: list, gap: float) -> list:
 
 
 def phase_out_by_donor_chart(iso3: str, country_name: str):
-    """One line per funder: share of its 2019-2023 health aid to the country cut in each year 2026-2030."""
+    """One line per funder: share of its 2023 health aid to the country cut in each year 2026-2030."""
     d = phase_out_by_donor(iso3)
     if d.empty:
         return
@@ -472,9 +515,10 @@ def phase_out_by_donor_chart(iso3: str, country_name: str):
     _layout(fig, h=max(340, 26 * len(names) + 90), showlegend=False, margin=dict(l=10, r=170, t=10, b=10),
             xaxis=dict(tickvals=scn.YEARS, range=[scn.YEARS[0] - 0.25, scn.YEARS[-1] + 0.15], tickfont=dict(size=13),
                        title=dict(text="Year", standoff=8)),
-            yaxis=dict(title=dict(text="Share of 2019-2023 aid cut", standoff=12), ticksuffix="%", tickfont=dict(size=13),
+            yaxis=dict(title=dict(text="Share of 2023 aid cut", standoff=12), ticksuffix="%", tickfont=dict(size=13),
                        range=[min(lo, 0) - 3, max(hi, pos[-1] if pos else hi) + 5]))
-    chart(fig, source="IHME DAH 2019-2023; OECD ODA; Global Fund GC7/GC8; Gavi; US MOUs.")
+    chart(fig, source=f"Team projection workbook on {hm.SOURCES[source()]} 2023 health aid: OECD ODA outlook; "
+                      "Global Fund GC7/GC8; Gavi 6.0 pledges; US MOUs; UK and Australian allocations.")
 
 
 def preset_choices(ci, iso3) -> tuple:
@@ -1027,7 +1071,7 @@ def risk_lines(iso3: str, res: dict) -> list:
     """The country's biggest risks under Announced donor cuts, as short sentences: the donor-channel flow behind the
     largest share of the 2030 loss, the year the loss jumps most, and the service whose coverage falls furthest."""
     out = []
-    S = hm.announcement_sources(iso3)
+    S = hm.announcement_sources(iso3, source=source())
     last = scn.YEARS[-1]
     if not S.empty and S[f"lost_{last}"].sum() > 0:
         tot = S[f"lost_{last}"].clip(lower=0).sum()
@@ -1070,8 +1114,9 @@ def render_model_section(iso3: str, country_name: str, imf: dict | None, ctl: di
     ci = I["ci"]
     th.section_header("monitor_heart", f"How Aid Cuts Translate into Coverage in {country_name}", help=INTRO)
     if iso3 not in ci.index or iso3 not in set(I["lines"].iso3):
-        st.info(f"{country_name} has no recorded HIV, TB, malaria or vaccine aid in 2021-2023, so there is nothing to "
-                "model for this country. See the All Countries page for the other countries.")
+        st.info(f"{country_name} has no recorded HIV, TB, malaria or vaccine aid in {hm.SOURCE_BASE_YEAR} in the "
+                f"{hm.SOURCES[source()]} data, so there is nothing to model for this country with this data source. "
+                "Try the other data source at the top of the page, or see the All Countries page.")
     else:
         _country_results(iso3, country_name, ctl, sk, imf or {})
 
@@ -1247,7 +1292,7 @@ def _headline_items(res, ptab=None, basis: str = "Assumes the cut is sustained f
     items = [
         ("Aid at Risk (per Year)", money(T["gross"]),
          f"{T['gross'] / T['base']:.0%} of {money(T['base'])} for these four buckets" if T["base"] else None,
-         "Yearly HIV, TB, malaria and vaccine aid removed by the scenario, out of the 2021-2023 average."),
+         f"Yearly HIV, TB, malaria and vaccine aid removed by the scenario, out of {hm.SOURCE_BASE_YEAR} aid."),
         ("Replaced by Government", money(T["replaced"]),
          f"{T['replaced'] / T['gross']:.0%} of the loss" if T["gross"] > 0 else None,
          "Set by the government response in the sidebar, limited by fiscal space."),
@@ -1288,7 +1333,7 @@ def _comparison(iso3, country_name, ctl, res_a, items_a):
     _layout(fig, h=340, title=_title(th.title_sub("Net Aid Lost by Disease", "Scenario A vs. B, per year")),
             legend=dict(orientation="h", y=-0.12, x=0, yanchor="top"),
             yaxis=dict(title="US$ million a year", rangemode="tozero"))
-    chart(fig, source=SRC_MODEL)
+    chart(fig, source=src_model())
 
 
 CARD_FOOT_TIP = ("Total aid lost over 5 years ($5M) divided by extra deaths over the same 5 years; this equals $1M "
@@ -1299,10 +1344,15 @@ NO_DEATHS_REASON = {"Malaria": " (very low transmission)"}
 
 
 @st.cache_data(show_spinner=False, max_entries=64)
-def _card_runs(iso3: str, ptab_json: str, trend: bool) -> dict:
-    """Full-model US$1M-a-year cut per disease (audit I-04), cached by country, parameters and death-rate setting."""
+def _card_runs_c(src: str, iso3: str, ptab_json: str, trend: bool) -> dict:
+    """Full-model US$1M-a-year cut per disease (audit I-04), cached by data source, country, parameters and
+    death-rate setting."""
     ptab = pd.read_json(io.StringIO(ptab_json), orient="split")
-    return {b: hm.per_million_card(iso3, b, _inputs(), ptab, trend) for b in hm.BUCKETS}
+    return {b: hm.per_million_card(iso3, b, _inputs_for(src), ptab, trend) for b in hm.BUCKETS}
+
+
+def _card_runs(iso3: str, ptab_json: str, trend: bool) -> dict:
+    return _card_runs_c(source(), iso3, ptab_json, trend)
 
 
 def _per_million_cards(iso3: str, ptab_json: str, trend: bool, country_name: str = "") -> list:
@@ -1607,7 +1657,7 @@ AVG_LABEL = "Average 2026-2030"
 AID_LABEL = {
     "chart": lambda what: f"{what} · each year {scn.YEARS[0]}-{scn.YEARS[-1]} · before government replacement",
     "bucket": f"HIV, TB, malaria & vaccine aid · average per year {scn.YEARS[0]}-{str(scn.YEARS[-1])[2:]}",
-    "table_base": "per year, 2021-23 average",
+    "table_base": f"per year, {hm.SOURCE_BASE_YEAR}",
     "table_lost": f"per year, average {scn.YEARS[0]}-{str(scn.YEARS[-1])[2:]}, after government replacement",
     "fiscal": lambda what: f"{what.lower() if what.startswith('All') else what}, average "
                            f"{scn.YEARS[0]}-{str(scn.YEARS[-1])[2:]}, before government replacement",
@@ -1991,7 +2041,7 @@ def _fiscal_panel(res: dict, country_name: str, imf: dict, fiscal_t=scn.DEFAULT_
 # --------------------------------------------------------------------------- #
 WHO_MALARIA_DEATHS_2024 = 610_000      # WHO World Malaria Report 2025: estimated malaria deaths worldwide in 2024
 DATA_YEARS = [   # (input, column holding each country's year or None, fixed years, source, column holding the source)
-    ("Aid baseline (what a scenario cuts)", None, "2021-2023 average", "IHME DAH database", None),
+    ("Aid baseline (what a scenario cuts)", None, "2023", "IHME DAH or OECD CRS (data source toggle)", None),
     ("Government health spending", None, "2023", "IHME health spending database", None),
     ("Health share of government spending", "sh_xpd_ghed_ge_zs_year", None, "World Bank WDI (WHO GHED)", None),
     ("People living with HIV", "plhiv_year", None, "UNAIDS / WHO", "plhiv_source"),
@@ -2039,14 +2089,13 @@ def _yr_range(a: int, b: int) -> str:
 
 def inputs_years_line(ci: pd.DataFrame, isos) -> str:
     """One line for under the country header (audit I-17), with every year read from the inputs: 'Inputs: aid
-    2021-23 average; coverage 2024-25 (malaria: MAP 2025); government health spending 2023; applied to 2026-2030
+    2023; coverage 2024-25 (malaria: MAP 2025); government health spending 2023; applied to 2026-2030
     without projection.'"""
     d = ci.loc[[c for c in isos if c in ci.index]]
     modes = [int(pd.to_numeric(d[c], errors="coerce").dropna().mode()[0]) for c in COVERAGE_YEAR_COLS
              if c in d and pd.to_numeric(d[c], errors="coerce").notna().any()]
     mal = pd.to_numeric(d.get("mal_cm_cov_year"), errors="coerce").dropna()
-    a0, a1 = hm.AID_BASE_YEARS
-    return (f"Inputs: aid {_yr_range(a0, a1)} average; coverage {_yr_range(min(modes), max(modes))}"
+    return (f"Inputs: aid {hm.SOURCE_BASE_YEAR}; coverage {_yr_range(min(modes), max(modes))}"
             + (f" (malaria: MAP {int(mal.mode()[0])})" if len(mal) else "")
             + f"; government health spending {hm.GHES_YEAR}; applied to {scn.YEARS[0]}-{scn.YEARS[-1]} without "
               "projection.")
@@ -2111,7 +2160,7 @@ def _all_country_results(sk, ctl) -> pd.DataFrame:
     if preset == scn.SHORTFALLS:
         ci = _inputs()["ci"]
         sk = scn.scenario_key(scn.build_scenario(preset, scn.default_opts(preset, ci), ci))
-    path = scn.precomputed_path(hm.MODEL_DIR, preset)
+    path = scn.precomputed_path(source_dir(), preset)
     if (preset in scn.PRECOMPUTED_PRESETS and path.exists() and ctl["fiscal_t"] == scn.DEFAULT_FISCAL
             and ctl["trend"] == scn.DEFAULT_MORTALITY_TREND):
         ci = _inputs()["ci"]
@@ -2120,7 +2169,7 @@ def _all_country_results(sk, ctl) -> pd.DataFrame:
         same_params = ptab[["central", "low", "high"]].astype(float).reindex(p0.index).equals(
             p0[["central", "low", "high"]].astype(float))
         if sk == default_sk and same_params:
-            return _precomputed(preset, path.stat().st_mtime)
+            return _precomputed(preset, path.stat().st_mtime, source())
     return _run_all(sk, ctl["fiscal_t"], ctl["ptab_json"], ctl["trend"])
 
 
@@ -2177,7 +2226,7 @@ def cross_country(sk, ctl, iso3, names) -> pd.DataFrame:
     _, tcol = st.columns([5, 1])
     world = tcol.toggle("World", value=False, key="m_map_world", help="Show the whole world instead of Africa and Asia")
     groups = scn.mou_groups(_inputs()["ci"], list(names)) if is_mou else None
-    chart(_world_map(A, iso3, world, groups, names), source=SRC_MODEL)
+    chart(_world_map(A, iso3, world, groups, names), source=src_model())
 
     c1, c2 = st.columns([1.15, 1])
     with c1:
@@ -2226,7 +2275,7 @@ def cross_country(sk, ctl, iso3, names) -> pd.DataFrame:
                     yaxis=dict(type="log", title="people losing a service per 100,000 (log)",
                                tickvals=LOG_TICKS, ticktext=[f"{v:g}" for v in LOG_TICKS],
                                range=[min(y_lo, (prev or y_lo) - 0.1), float(np.log10(d["people_per_100k"].max())) + 0.2]))
-            chart(fig, source=SRC_MODEL, note=f"Each circle is a country, sized by aid lost per year; "
+            chart(fig, source=src_model(), note=f"Each circle is a country, sized by aid lost per year; "
                                               f"{names.get(iso3, iso3)} is highlighted. Dotted lines are medians.")
     with c2:
         top = A.sort_values("people_lost", ascending=False).head(15).iloc[::-1]
@@ -2251,7 +2300,7 @@ def cross_country(sk, ctl, iso3, names) -> pd.DataFrame:
                 xaxis=dict(range=[0, float(tot15.max()) * 1.22]), margin=dict(l=10, r=20, t=70, b=10))
         rank = int((A["people_lost"] > A.loc[A["iso3"] == iso3, "people_lost"].max()).sum()) + 1 \
             if (A["iso3"] == iso3).any() else None
-        chart(fig, source=SRC_MODEL,
+        chart(fig, source=src_model(),
               note=None if rank is None or rank <= 15 else f"{sel} ranks {rank} of {len(A)}.")
     return A
 
