@@ -42,12 +42,14 @@ def test_headline_total_matches_workbook(src):
 
 
 def test_disease_money_matches_workbook(src):
-    """HIV, TB and malaria money in the model's cells = the workbook rows' baseline x their health-area share (OECD),
-    or the rows' own IHME program areas (IHME), for every dashboard country."""
+    """HIV, TB and malaria money in the model's cells = the workbook rows' baseline x their health-area share (OECD;
+    Global Fund rows re-split by the Global Fund's own budgets, wi.gf_resplit), or the rows' own IHME program areas
+    as IHME publishes them (IHME), for every dashboard country."""
     cells, rows = src["I"]["lines"], src["rows"]
     rows = rows[rows.iso3.isin(DASHBOARD_ISO3)]
     got = cells.groupby(["iso3", "bucket"]).usd.sum()
     if src["source"] == "oecd":
+        rows = wi.gf_resplit(rows)
         for b, col in wi.AREA.items():
             # a few OECD rows carry a negative share (net adjustments, e.g. WHO own funds to South Sudan, -US$48K of
             # malaria): there is no negative money to cut, so those are left out
@@ -95,3 +97,63 @@ def test_sources_differ_and_share_country_data():
     assert a["ci"].equals(b["ci"])
     ka, kb = (x["lines"].query("iso3 == 'KEN'").usd.sum() for x in (a, b))
     assert ka > 0 and kb > 0 and abs(ka / kb - 1) > 0.01
+
+
+def test_global_fund_resplit_keeps_the_three_diseases_total():
+    """OECD fix (Nov 2026): Global Fund rows divide their HIV + TB + malaria money by the Global Fund's own 2023 budget
+    split, so the three diseases' total is unchanged for every row; other rows are untouched; Ghana's Global Fund money,
+    all HIV or malaria in the OECD workbook (one combined TB/HIV grant), now has a TB part."""
+    rows = wi.load_rows("oecd")
+    new = wi.gf_resplit(rows)
+    cols = list(wi.AREA.values())
+    np.testing.assert_allclose(new[cols].sum(axis=1), rows[cols].sum(axis=1), rtol=1e-9, atol=1e-12)
+    other = rows.chan_grp != "Global Fund"
+    pd.testing.assert_frame_equal(new.loc[other, cols], rows.loc[other, cols])
+    gha = (rows.iso3 == "GHA") & (rows.chan_grp == "Global Fund")
+    assert (new.loc[gha, wi.AREA["TB"]] > 0).all()
+    # the workbook itself now carries the split (audit/oecd_workbook_gf_fix.py), so re-splitting changes nothing
+    np.testing.assert_allclose(new[cols].to_numpy(float), rows[cols].to_numpy(float), atol=2e-6)
+
+
+def test_global_fund_split_agrees_with_oecd_where_grants_are_separate():
+    """Where the Global Fund gives separate HIV, TB and malaria grants, the OECD's own TB share and the Global Fund
+    budget split agree (the check behind using the Global Fund split for every Global Fund row)."""
+    # the OECD workbook's original (Creditor Reporting System) split, saved before the workbook was updated
+    before = pd.read_csv(Path(wi.GF_SPLIT).parent / "oecd_gf_shares_before_fix.csv").set_index("iso3")
+    oecd_tb = before["oecd_crs_tb"]
+    split = pd.read_csv(wi.GF_SPLIT).set_index("iso3")
+    comb = split[split.combined_grant].index.intersection(oecd_tb.index)
+    assert (oecd_tb[comb] == 0).sum() >= 20                 # the hole: TB 0 where the grant is combined TB/HIV
+    sep = split[~split.combined_grant].index.intersection(oecd_tb.dropna().index)
+    assert len(sep) >= 30
+    assert np.corrcoef(oecd_tb[sep], split.loc[sep, "gf_tb"])[0, 1] > 0.9
+
+
+# ---------------- aid-data gaps (audit/aid_gaps.py) ----------------
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "audit"))
+import aid_gaps as ag  # noqa: E402
+
+
+@pytest.mark.parametrize("source", ["ihme", "oecd"])
+def test_no_global_fund_disease_hole(source):
+    """Where the Global Fund budgets at least 5% (and US$0.5M) of a country's HIV + TB + malaria money for a disease,
+    the model has Global Fund money for it (the OECD workbook had TB = 0 for 42 recipients with combined grants)."""
+    I = hm.load_inputs(source=source)
+    gf = pd.read_csv(ag.GF).set_index("iso3")
+    holes = [f for f in ag.money_flags(source, I["lines"], I["ci"], gf) if f["check"] == "gf_hole"]
+    assert holes == [], holes
+
+
+@pytest.mark.parametrize("source", ["ihme", "oecd"])
+def test_every_disease_with_aid_has_numbers_or_an_explained_zero(source):
+    """A full cut of any disease with aid gives finite numbers and some deaths, except where WHO data say the cut can't
+    cost lives: no malaria deaths (WHO estimates 0), vaccines fully government-funded (donor share 0), or a TB
+    programme with no external funding."""
+    I = hm.load_inputs(source=source)
+    ci = I["ci"]
+    for f in ag.result_flags(source, I, hm.load_params()):
+        iso, b = f["iso3"], f["disease"]
+        assert "nan" not in f["note"], f
+        explained = {"Malaria": ci.loc[iso, "malaria_deaths"] == 0, "Immunization": ci.loc[iso, "donor_share_imm"] == 0,
+                     "TB": ci.loc[iso, "tb_prog_ext_share"] == 0}.get(b, False)
+        assert explained, f

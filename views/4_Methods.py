@@ -288,6 +288,23 @@ with tabs[2]:
     Neither workbook includes lending funded by debt repayments, China and other non-DAC donors, or Other /
     unallocable money. Guyana and Panama have no 2023 IHME aid, so they can only be modelled with OECD data.
 
+    **Global Fund money in the OECD data (November 2026).** The OECD records each grant under one disease code, so
+    where the Global Fund gives a country one combined TB/HIV (or multi-component) grant, the TB part was counted as
+    HIV: Global Fund money to 42 of 107 recipients had no TB at all (Ghana, Zambia, Malawi, South Africa, Ukraine,
+    Haiti, Sierra Leone, Senegal...). Each OECD Global Fund flow now keeps its HIV + TB + malaria total and divides it
+    by the Global Fund's own 2023 grant budgets for the country (the disease of each budget line;
+    `audit/gf_disease_split.py`), and the OECD workbook itself carries this split (`OECD_aid_cut_projections.xlsx`,
+    Base_Projection columns AC-AE and AL-AN, Global Fund rows; `audit/oecd_workbook_gf_fix.py`; the original split is
+    kept in `audit/logic_review/oecd_gf_shares_before_fix.csv`). Where the Global Fund gives separate grants, the OECD
+    split and the budgets agree (TB share correlation 0.96, 41 countries), and the budgets match what was actually
+    spent in 2023 (correlation 0.93). About US$175M a year moves from HIV to TB; countries where OECD and IHME TB aid differ
+    more than threefold fall from 38 to 17, and OECD TB aid tracks the external TB money programmes report to WHO more
+    closely (countries under a fifth of WHO's figure: 13 before, 5 after). The IHME data are used as IHME publishes them. `audit/aid_gaps.py`
+    checks every country, source and disease for holes; what remains is money the aid data don't record (2023 was a
+    low Global Fund year in Burundi and Botswana; the OECD data have little Global Fund money for Angola, Namibia,
+    Sierra Leone and São Tomé) and diseases WHO data say a cut can't kill from (no malaria deaths; vaccines fully
+    government-funded).
+
     **Baseline.** For each country, the selected workbook's 2023 aid is summed by **source group x channel group x
     service line**. Each such combination is a *cell*, and carries its own yearly cut from the workbook:
     """)

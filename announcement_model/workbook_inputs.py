@@ -11,7 +11,9 @@ has, so each row is split as follows:
 
   IHME rows  the row's own 2023 IHME program areas (country_data/, the same rows the workbook was built from; checked
              to match the workbook's DAH 2023 to the dollar), mapped to service lines with prepare_model.LINES.
-  OECD rows  disease $ = Baseline x the row's HIV / TB / malaria share; split into service lines with the country's
+  OECD rows  disease $ = Baseline x the row's HIV / TB / malaria share (Global Fund rows: the row's HIV + TB + malaria
+             total divided by the Global Fund's own 2023 budget split for the country, audit/gf_disease_split.py,
+             because the OECD records a combined TB/HIV grant under HIV only); split into service lines with the country's
              IHME 2023 mix for the same donor group and channel group (else the channel group, else the country, else
              all countries). Immunization = the row's newborn & child health $ x IHME's vaccine share of non-systems
              child health money (OECD reports health systems as its own area, so the systems part is already out;
@@ -106,6 +108,29 @@ def split_ihme(bp: pd.DataFrame, raw: pd.DataFrame) -> pd.DataFrame:
     return m
 
 
+GF_SPLIT = REPO / "audit" / "logic_review" / "gf_disease_split.csv"
+
+
+def gf_resplit(bp: pd.DataFrame) -> pd.DataFrame:
+    """OECD rows through the Global Fund: the row's HIV + TB + malaria share, divided between the three by the Global
+    Fund's own 2023 budgets for the country (audit/gf_disease_split.py). In the OECD workbook, Global Fund money to 42
+    of 107 recipients has a TB share of 0: those countries get one combined TB/HIV (or multi-component) grant, which
+    the OECD records under a single purpose code, so the TB part was counted as HIV. Where the Global Fund gives
+    separate grants, the two splits agree (TB share correlation 0.96, median difference 3 points, 41 countries), so
+    the Global Fund split is used for every Global Fund row. Money stays within the three diseases (their total is
+    unchanged); rows of a country without a Global Fund budget keep the OECD split."""
+    gf = pd.read_csv(GF_SPLIT).set_index("iso3")
+    k3 = ["gf_hiv", "gf_tb", "gf_malaria"]
+    gf[k3] = gf[k3].div(gf[k3].sum(axis=1), axis=0)                # exactly 1 (the file is rounded to 6 decimals)
+    out = bp.copy()
+    m = (out.chan_grp == "Global Fund") & out.iso3.isin(gf.index)
+    tot = out.loc[m, list(AREA.values())].sum(axis=1)
+    for b, col in AREA.items():
+        k = {"HIV": "gf_hiv", "TB": "gf_tb", "Malaria": "gf_malaria"}[b]
+        out.loc[m, col] = tot * out.loc[m, "iso3"].map(gf[k])
+    return out
+
+
 def split_oecd(bp: pd.DataFrame, raw: pd.DataFrame) -> pd.DataFrame:
     """Each OECD row's service-line US$: its disease shares, split by the closest IHME 2023 mix."""
     levels = [["iso3", "src_grp", "chan_grp"], ["iso3", "chan_grp"], ["iso3"]]
@@ -161,7 +186,7 @@ def line_cells(rows: pd.DataFrame) -> pd.DataFrame:
 
 def build(source: str, raw: pd.DataFrame) -> dict:
     bp = load_rows(source)
-    rows = split_ihme(bp, raw) if source == "ihme" else split_oecd(bp, raw)
+    rows = split_ihme(bp, raw) if source == "ihme" else split_oecd(gf_resplit(bp), raw)
     cells, cuts = line_cells(rows), cut_table(bp)
     d = OUT / source
     d.mkdir(parents=True, exist_ok=True)

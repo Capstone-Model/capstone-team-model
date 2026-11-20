@@ -1,0 +1,60 @@
+source,iso3,check,disease,model_usd,reference_usd,note
+ihme,BDI,gf_low_total,HIV+TB+malaria,2217000.0,31220773.65,Global Fund money in the aid data well below the Global Fund's 2023 budget
+ihme,BWA,gf_low_total,HIV+TB+malaria,878000.0,4624238.77,Global Fund money in the aid data well below the Global Fund's 2023 budget
+ihme,GIN,tb_vs_who,TB,11808000.0,1928817.0000000002,TB aid vs external TB money reported to WHO
+ihme,LBY,tb_vs_who,TB,128000.0,2104250.0,TB aid vs external TB money reported to WHO
+ihme,MLI,tb_vs_who,TB,15102000.0,2287102.0,TB aid vs external TB money reported to WHO
+ihme,NER,tb_vs_who,TB,9043000.0,1091185.0,TB aid vs external TB money reported to WHO
+ihme,ZWE,tb_vs_who,TB,101551000.0,16940521.5,TB aid vs external TB money reported to WHO
+ihme,AZE,no_result,Malaria,155000.0,,deaths_5y=0; units_lost=3e+04; net_loss_usd=1.55e+05
+ihme,BLZ,no_result,Malaria,117000.0,,deaths_5y=0; units_lost=1.54e+04; net_loss_usd=1.17e+05
+ihme,BWA,no_result,Immunization,1559000.0,,deaths_5y=0; units_lost=0; net_loss_usd=1.56e+06
+ihme,DOM,no_result,TB,2942000.0,,deaths_5y=0; units_lost=0; net_loss_usd=2.94e+06
+ihme,DOM,no_result,Malaria,786000.0,,deaths_5y=0; units_lost=1.16e+05; net_loss_usd=7.86e+05
+ihme,DOM,no_result,Immunization,1753000.0,,deaths_5y=0; units_lost=0; net_loss_usd=1.75e+06
+ihme,EGY,no_result,Malaria,3309000.0,,deaths_5y=0; units_lost=3.87e+05; net_loss_usd=3.31e+06
+ihme,FJI,no_result,Immunization,2853000.0,,deaths_5y=0; units_lost=0; net_loss_usd=2.85e+06
+ihme,GTM,no_result,Malaria,3038000.0,,deaths_5y=0; units_lost=2.49e+05; net_loss_usd=3.04e+06
+ihme,HND,no_result,Malaria,1557000.0,,deaths_5y=0; units_lost=1.19e+05; net_loss_usd=1.56e+06
+ihme,IRQ,no_result,Malaria,2044000.0,,deaths_5y=0; units_lost=2.85e+05; net_loss_usd=2.04e+06
+ihme,JAM,no_result,Malaria,525000.0,,deaths_5y=0; units_lost=6.59e+04; net_loss_usd=5.25e+05
+ihme,JOR,no_result,Malaria,2095000.0,,deaths_5y=0; units_lost=2.69e+05; net_loss_usd=2.1e+06
+ihme,KGZ,no_result,Malaria,1389000.0,,deaths_5y=0; units_lost=4.53e+04; net_loss_usd=1.39e+06
+ihme,KHM,no_result,Malaria,16368000.0,,deaths_5y=0; units_lost=1.21e+06; net_loss_usd=1.64e+07
+ihme,LAO,no_result,Malaria,6063000.0,,deaths_5y=0; units_lost=5.33e+05; net_loss_usd=6.06e+06
+ihme,LBY,no_result,Malaria,151000.0,,deaths_5y=0; units_lost=4.49e+04; net_loss_usd=1.51e+05
+ihme,LSO,no_result,Malaria,1338000.0,,deaths_5y=0; units_lost=8.81e+04; net_loss_usd=1.34e+06
+ihme,MDA,no_result,Malaria,128000.0,,deaths_5y=0; units_lost=3.91e+04; net_loss_usd=1.28e+05
+ihme,MNG,no_result,Malaria,113000.0,,deaths_5y=0; units_lost=2.13e+04; net_loss_usd=1.13e+05
+ihme,MUS,no_result,Malaria,375000.0,,deaths_5y=0; units_lost=5.46e+04; net_loss_usd=3.75e+05
+ihme,NAM,no_result,Immunization,661000.0,,deaths_5y=0; units_lost=0; net_loss_usd=6.61e+05
+ihme,NIC,no_result,Malaria,1392000.0,,deaths_5y=0; units_lost=1.07e+05; net_loss_usd=1.39e+06
+ihme,SLV,no_result,Malaria,1155000.0,,deaths_5y=0; units_lost=7.66e+04; net_loss_usd=1.16e+06
+ihme,SWZ,no_result,Malaria,2400000.0,,deaths_5y=0; units_lost=1.39e+04; net_loss_usd=2.4e+06
+ihme,TJK,no_result,Malaria,350000.0,,deaths_5y=0; units_lost=0; net_loss_usd=3.5e+05
+ihme,TLS,no_result,Malaria,2062000.0,,deaths_5y=0; units_lost=1.52e+05; net_loss_usd=2.06e+06
+ihme,VNM,no_result,Malaria,12643000.0,,deaths_5y=0; units_lost=1.07e+06; net_loss_usd=1.26e+07
+oecd,AGO,gf_low_total,HIV+TB+malaria,6436610.262999999,24045010.09,Global Fund money in the aid data well below the Global Fund's 2023 budget
+oecd,BDI,gf_low_total,HIV+TB+malaria,4166131.712,31220773.65,Global Fund money in the aid data well below the Global Fund's 2023 budget
+oecd,BWA,gf_low_total,HIV+TB+malaria,371573.17999999993,4624238.77,Global Fund money in the aid data well below the Global Fund's 2023 budget
+oecd,NAM,gf_low_total,HIV+TB+malaria,225257.318,8847378.53,Global Fund money in the aid data well below the Global Fund's 2023 budget
+oecd,SLE,gf_low_total,HIV+TB+malaria,4738298.154000001,26759870.87,Global Fund money in the aid data well below the Global Fund's 2023 budget
+oecd,STP,gf_low_total,HIV+TB+malaria,0.0,1564944.36,Global Fund money in the aid data well below the Global Fund's 2023 budget
+oecd,BWA,tb_vs_who,TB,111554.09412570001,1135569.9999999998,TB aid vs external TB money reported to WHO
+oecd,IRQ,tb_vs_who,TB,70470.80999999998,1049999.9999999995,TB aid vs external TB money reported to WHO
+oecd,LBY,tb_vs_who,TB,3773.25,2104250.0,TB aid vs external TB money reported to WHO
+oecd,NAM,tb_vs_who,TB,69677.02203401,1982799.9999999998,TB aid vs external TB money reported to WHO
+oecd,NER,tb_vs_who,TB,7181230.67437048,1091185.0,TB aid vs external TB money reported to WHO
+oecd,SLE,tb_vs_who,TB,867596.5900941181,5642146.0,TB aid vs external TB money reported to WHO
+oecd,SLV,tb_vs_who,TB,25285.120000000003,2821841.4999999986,TB aid vs external TB money reported to WHO
+oecd,VEN,tb_vs_who,TB,152265.22,1324801.5,TB aid vs external TB money reported to WHO
+oecd,FJI,no_result,Immunization,63455.472092813696,,deaths_5y=0; units_lost=0; net_loss_usd=6.35e+04
+oecd,GTM,no_result,Malaria,1047902.4236002801,,deaths_5y=0; units_lost=8.23e+04; net_loss_usd=1.05e+06
+oecd,HND,no_result,Malaria,2346941.006035819,,deaths_5y=0; units_lost=1.87e+05; net_loss_usd=2.35e+06
+oecd,KHM,no_result,Malaria,8462276.61,,deaths_5y=0; units_lost=6.34e+05; net_loss_usd=8.46e+06
+oecd,LAO,no_result,Malaria,525748.88,,deaths_5y=0; units_lost=4.44e+04; net_loss_usd=5.26e+05
+oecd,NIC,no_result,Malaria,2019005.796732971,,deaths_5y=0; units_lost=1.74e+05; net_loss_usd=2.02e+06
+oecd,PAN,no_result,Malaria,4332000.0,,deaths_5y=0; units_lost=6.98e+05; net_loss_usd=4.33e+06
+oecd,SWZ,no_result,Malaria,552658.206798168,,deaths_5y=0; units_lost=1.39e+04; net_loss_usd=5.53e+05
+oecd,TLS,no_result,Malaria,2309788.54397478,,deaths_5y=0; units_lost=1.41e+05; net_loss_usd=2.31e+06
+oecd,VNM,no_result,Malaria,395589.36,,deaths_5y=0; units_lost=3.73e+04; net_loss_usd=3.96e+05
